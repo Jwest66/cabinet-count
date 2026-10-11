@@ -44,6 +44,7 @@ Open it from the new icon. The first time you tap **Scan barcode**, allow camera
 - **Later scans** add 1, or use 1 if you switch the toggle. The scanner stays open so you can scan a whole bag of groceries in a row. Tap **Done** when finished.
 - **Light** turns on the flashlight in dark cabinets (Android only; iPhone browsers don't allow it).
 - **−** and **+** adjust counts by hand. Tap an item to rename, move or delete it.
+- **Pictures**: products get a thumbnail from the product database when one exists. Tap an item and use **Take photo** to add your own (stored as a small thumbnail with the item) or **Remove picture**. Items without a picture show their first letter.
 
 ## Product lookup
 

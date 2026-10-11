@@ -53,7 +53,17 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
 .row:first-child{border-top:0}
-.row .main{min-width:0;cursor:pointer;background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit}
+.row .main{min-width:0;cursor:pointer;background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;display:flex;align-items:center;gap:12px}
+.row .text{min-width:0;display:block}
+.thumb{position:relative;flex:none;width:44px;height:44px;border-radius:10px;overflow:hidden;display:grid;place-items:center;font:700 1.1rem var(--f-display)}
+.thumb img{position:absolute;inset:0;width:100%;height:100%;box-sizing:border-box}
+.thumb img.prod{object-fit:contain;background:#fff;padding:3px}
+.thumb img.own{object-fit:cover}
+.thumb.big{width:76px;height:76px;border-radius:14px;font-size:1.7rem}
+.pic-row{display:flex;gap:14px;align-items:center}
+.pic-actions{display:flex;flex-wrap:wrap;gap:8px}
+.pic-btn{position:relative;overflow:hidden;display:inline-block}
+.pic-btn input{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:100px;cursor:pointer;padding:0;border:0}
 .name{font-weight:600;overflow-wrap:anywhere}
 .meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:.78rem;color:var(--muted);margin-top:2px}
 .code{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.04em}
@@ -221,10 +231,54 @@ function prettyCode(c){
 const findByCode=c=>state.items.find(i=>i.barcode===c);
 const randId=()=>"it_"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const idForItem=d=>d.barcode?("bc_"+d.barcode.replace(/[^A-Za-z0-9]/g,"").slice(0,60)):randId();
+function safeImg(u){u=String(u||"");return /^https:\/\/[^\s"'<>]{6,600}$/.test(u)?u:"";}
+function safePhoto(p){p=String(p||"");return p.length<=90000&&/^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(p)?p:"";}
 function cleanItem(d){
-  return{name:String(d.name||"").trim().slice(0,200)||"Unnamed item",barcode:normCode(d.barcode||"").slice(0,64),
+  const o={name:String(d.name||"").trim().slice(0,200)||"Unnamed item",barcode:normCode(d.barcode||"").slice(0,64),
     location:!d.location?"Cabinet":LOCS.includes(d.location)?d.location:"Other",
     qty:Math.max(0,parseInt(d.qty)||0),low:Math.max(0,parseInt(d.low)||0)};
+  const img=safeImg(d.img),photo=safePhoto(d.photo);
+  if(img)o.img=img;
+  if(photo)o.photo=photo;
+  if(d.imgChecked||img||photo)o.imgChecked=true; // a picture was found, taken, or looked for already
+  return o;
+}
+/* ---------- item pictures ---------- */
+const TILE=[["#8EA8FF","#0D1222"],["#C8F23C","#172000"],["#FF9180","#3B1610"],["#4ADE80","#06240F"],["#F5C451","#2B1D00"],["#C9A8FF","#1E0D3A"]];
+function tileColors(name){let h=0;for(const ch of String(name||""))h=(h*31+ch.charCodeAt(0))>>>0;return TILE[h%TILE.length];}
+function thumbHTML(i,big){
+  const[b,f]=tileColors(i.name),letter=esc((String(i.name||"").trim()[0]||"?").toUpperCase());
+  const photo=safePhoto(i.photo),img=safeImg(i.img);
+  const pic=photo?`<img class="own" src="${photo}" alt="">`:img?`<img class="prod" src="${esc(img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:"";
+  return`<span class="thumb${big?" big":""}" style="background:${b};color:${f}" aria-hidden="true">${letter}${pic}</span>`;
+}
+// Your own photo becomes a small square JPEG (about 10 KB) stored with the item.
+function makeThumb(file){
+  return new Promise((res,rej)=>{
+    const u=URL.createObjectURL(file),im=new Image();
+    im.onload=()=>{
+      const s=Math.min(im.naturalWidth,im.naturalHeight),c=document.createElement("canvas");c.width=c.height=160;
+      c.getContext("2d").drawImage(im,(im.naturalWidth-s)/2,(im.naturalHeight-s)/2,s,s,0,0,160,160);
+      URL.revokeObjectURL(u);res(c.toDataURL("image/jpeg",0.72));
+    };
+    im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("unreadable"));};
+    im.src=u;
+  });
+}
+// Look up pictures for items scanned before this feature existed (or added without a lookup). Once per list per visit.
+const backfilled=new Set();
+async function backfillPictures(){
+  if(backfilled.has(store)||!navigator.onLine)return;
+  const s=store;backfilled.add(s);
+  const todo=state.items.filter(i=>i.barcode&&!i.img&&!i.photo&&!i.imgChecked).slice(0,30);
+  for(const it of todo){
+    if(store!==s)return;
+    const r=await lookup(it.barcode);
+    const cur=state.items.find(x=>x.id===it.id);
+    if(store!==s||!cur||cur.img||cur.photo)continue;
+    s.patch(it.id,r&&r.image?{img:r.image,imgChecked:true}:{imgChecked:true});
+    await new Promise(z=>setTimeout(z,800));
+  }
 }
 function timeAgo(ts){
   if(!ts)return"";const s=Math.round((Date.now()-ts)/1000);
@@ -241,17 +295,17 @@ async function getJSON(url,ms=6000){
 async function lookup(code){
   if(!/^\d{8,14}$/.test(code)||!navigator.onLine)return null;
   for(const c of code.length===12?["0"+code,code]:[code]){
-    const j=await getJSON(`https://world.openfoodfacts.org/api/v2/product/${c}.json?fields=product_name,brands,quantity`);
+    const j=await getJSON(`https://world.openfoodfacts.org/api/v2/product/${c}.json?fields=product_name,brands,quantity,image_front_small_url,image_small_url,image_front_thumb_url`);
     const p=j&&j.status===1&&j.product;
     if(p&&p.product_name){
       const brand=(p.brands||"").split(",")[0].trim();
       const name=[brand&&!p.product_name.toLowerCase().includes(brand.toLowerCase())?brand:"",p.product_name,p.quantity].filter(Boolean).join(" ");
-      return{name:name.trim(),source:"Open Food Facts"};
+      return{name:name.trim(),source:"Open Food Facts",image:safeImg(p.image_front_small_url||p.image_small_url||p.image_front_thumb_url)};
     }
   }
   const u=await getJSON(`https://api.upcitemdb.com/prod/trial/lookup?upc=${code}`);
   const it=u&&u.items&&u.items[0];
-  if(it&&it.title)return{name:it.title.trim(),source:"UPCitemdb"};
+  if(it&&it.title)return{name:it.title.trim(),source:"UPCitemdb",image:safeImg((it.images||[]).find(x=>/^https:/.test(x)))};
   return null;
 }
 
@@ -261,9 +315,10 @@ const Local={
   load(){try{this.items=JSON.parse(lsGet(LOCAL_KEY)||"[]");}catch(e){this.items=[];}if(!Array.isArray(this.items))this.items=[];},
   persist(){if(!lsSet(LOCAL_KEY,JSON.stringify(this.items)))toast("Couldn't save. Your phone may be out of storage.");},
   emit(){if(store===this){state.items=this.items.map(i=>({...i}));render();}},
-  start(){this.load();this.emit();},
+  start(){this.load();this.emit();setTimeout(backfillPictures,2500);},
   add(d){const id=randId();this.items.push({id,...cleanItem(d),updatedAt:Date.now()});this.persist();this.emit();return id;},
-  update(id,d){const it=this.items.find(i=>i.id===id);if(!it)return;Object.assign(it,cleanItem(d),{updatedAt:Date.now()});this.persist();this.emit();},
+  update(id,d){const k=this.items.findIndex(i=>i.id===id);if(k<0)return;this.items[k]={id,...cleanItem(d),updatedAt:Date.now()};this.persist();this.emit();},
+  patch(id,f){const it=this.items.find(i=>i.id===id);if(!it)return;Object.assign(it,f);this.persist();this.emit();},
   bump(id,delta){const it=this.items.find(i=>i.id===id);if(!it)return;it.qty=Math.max(0,(it.qty||0)+delta);it.updatedAt=Date.now();this.persist();this.emit();},
   remove(id){this.items=this.items.filter(i=>i.id!==id);this.persist();this.emit();},
   restore(item){this.items.push({...item,...cleanItem(item)});this.persist();this.emit();},
@@ -324,6 +379,7 @@ const Cloud={
       state.items=s.docs.map(d=>({id:d.id,...d.data()}));state.loading=false;
       render();
       if(this.importQueue&&!s.metadata.fromCache)this.runImport();
+      if(!s.metadata.fromCache)setTimeout(backfillPictures,2500);
     },lost));
   },
   lostAccess(){
@@ -343,6 +399,7 @@ const Cloud={
   update(id,d){this.fb.setDoc(this.ref(id),{...cleanItem(d),...this.stamp()}).catch(e=>this.fail(e));},
   bump(id,delta){this.fb.updateDoc(this.ref(id),{qty:this.fb.increment(delta),...this.stamp()}).catch(e=>this.fail(e));},
   remove(id){this.fb.deleteDoc(this.ref(id)).catch(e=>this.fail(e));},
+  patch(id,f){this.fb.updateDoc(this.ref(id),f).catch(e=>console.warn(e));},
   restore(item){this.fb.setDoc(this.ref(item.id),{...cleanItem(item),...this.stamp()}).catch(e=>this.fail(e));},
   async writeChunks(ops){
     for(let i=0;i<ops.length;i+=400){
@@ -478,10 +535,10 @@ function render(){
   if(!all.length){$("#listHost").innerHTML=`<div class="list"><div class="empty"><h2>${store===Cloud?"Your shared list is empty":"Your cabinet is empty"}</h2>Tap <b>Scan barcode</b> and hold a can or box up to the camera. The app looks up what it is, you confirm the name, and every scan after that adds one.</div></div>`;return;}
   if(!rows.length){$("#listHost").innerHTML=`<div class="list"><div class="empty">Nothing matches that search.</div></div>`;return;}
   $("#listHost").innerHTML=`<div class="list">${rows.map(i=>{const qty=Math.max(0,i.qty||0),isLow=qty<=(i.low??0);return`
-    <div class="row"><button class="main" data-edit="${esc(i.id)}">
+    <div class="row"><button class="main" data-edit="${esc(i.id)}">${thumbHTML(i)}<span class="text">
       <div class="name">${esc(i.name||"Unnamed item")}</div>
       <div class="meta"><span>${esc(i.location||"Cabinet")}</span>${i.barcode?`<span class="code">${esc(prettyCode(i.barcode))}</span>`:""}${isLow?`<span class="tag">${qty===0?"Out":"Low"}</span>`:""}</div>
-    </button><div class="stepper">
+    </span></button><div class="stepper">
       <button data-dec="${esc(i.id)}" aria-label="Use one ${esc(i.name)}">−</button>
       <span class="qty ${qty===0?"zero":""}">${qty}</span>
       <button data-inc="${esc(i.id)}" aria-label="Add one ${esc(i.name)}">+</button>
@@ -506,10 +563,15 @@ function armed(btn,label){if(btn.dataset.armed)return true;btn.dataset.armed="1"
 /* ===================== add / edit item ===================== */
 function itemForm({title,item,note,lookupCode}){
   const it=item||{};
+  let fImg=safeImg(it.img),fPhoto=safePhoto(it.photo),picRemoved=false;
   const changed=store===Cloud&&it.updatedByName&&it.updatedAt?`<p class="note">Last changed by ${esc(it.updatedBy===Cloud.user?.uid?"you":it.updatedByName)}, ${timeAgo(it.updatedAt)}</p>`:"";
   openSheet(`
     <h2>${esc(title)}</h2>
     ${note?`<p class="note ${note.err?"err":""}">${esc(note.text)}</p>`:""}
+    <div class="pic-row"><span id="picBox"></span><div class="pic-actions">
+      <span class="btn plain small pic-btn">Take photo<input type="file" id="picFile" accept="image/*" capture="environment" aria-label="Take a photo of this item"></span>
+      <button class="btn plain small" id="picRemove">Remove picture</button>
+    </div></div>
     <div class="field"><label for="fName">Item name</label><input id="fName" value="${esc(it.name||"")}" placeholder="e.g. Black beans, 15 oz can" autocomplete="off"><p class="found" id="foundNote" hidden></p></div>
     <div class="field"><label for="fCode">Barcode</label><input id="fCode" class="barcode-strip" inputmode="numeric" value="${esc(it.barcode||"")}" placeholder="Optional"><span class="note" id="codeHint"></span></div>
     <button class="btn plain" id="lookBtn">Look up this barcode</button>
@@ -529,6 +591,14 @@ function itemForm({title,item,note,lookupCode}){
     $("#codeHint").textContent=c?`${codeKind(c)}${ok===false?" · check digit doesn't match, so a digit may be off":ok?" · check digit OK":""}`:"";
     $("#lookBtn").hidden=!/^\d{8,14}$/.test(c);};
   $("#fCode").oninput=hint;hint();
+  const drawPic=()=>{if(!$("#picBox"))return;$("#picBox").innerHTML=thumbHTML({name:$("#fName").value||it.name,img:fImg,photo:fPhoto},true);$("#picRemove").hidden=!(fImg||fPhoto);};
+  drawPic();
+  $("#picFile").addEventListener("change",async e=>{
+    const f=e.target.files[0];e.target.value="";if(!f)return;
+    try{fPhoto=await makeThumb(f);picRemoved=false;drawPic();}
+    catch(_){toast("Couldn't read that photo. Try taking it again.");}
+  });
+  $("#picRemove").onclick=()=>{fImg="";fPhoto="";picRemoved=true;drawPic();};
   const doLookup=async()=>{
     const c=normCode($("#fCode").value),b=$("#lookBtn"),f=$("#foundNote");
     b.disabled=true;b.textContent="Looking it up…";
@@ -536,12 +606,13 @@ function itemForm({title,item,note,lookupCode}){
     if(!$("#lookBtn"))return;
     b.disabled=false;b.textContent="Look up this barcode";
     if(r){if(!$("#fName").value.trim()||$("#fName").dataset.auto){$("#fName").value=r.name;$("#fName").dataset.auto="1";}
+      if(r.image&&!fPhoto&&!picRemoved)fImg=r.image;drawPic();
       f.textContent=`Found on ${r.source}. Edit the name if you like.`;f.className="found";}
     else{f.textContent=navigator.onLine?"Not found in the product databases. Type a name.":"You're offline, so the lookup didn't run. Type a name.";f.className="note";}
     f.hidden=false;
   };
   $("#lookBtn").onclick=doLookup;
-  $("#fName").oninput=e=>delete e.target.dataset.auto;
+  $("#fName").oninput=e=>{delete e.target.dataset.auto;if(!fImg&&!fPhoto)drawPic();};
   $("#cancelBtn").onclick=closeSheet;
   if($("#delBtn"))$("#delBtn").onclick=e=>{
     if(!armed(e.target,"Tap again to delete"))return;
@@ -553,7 +624,8 @@ function itemForm({title,item,note,lookupCode}){
     if(!name){err.textContent="Give the item a name so you can find it later.";err.hidden=false;$("#fName").focus();return;}
     const dupe=code&&findByCode(code);
     if(dupe&&dupe.id!==it.id){err.textContent=`That barcode already belongs to ${dupe.name}.`;err.hidden=false;return;}
-    const data={name,barcode:code,location:$("#fLoc").value,qty:$("#fQty").value,low:$("#fLow").value};
+    const data={name,barcode:code,location:$("#fLoc").value,qty:$("#fQty").value,low:$("#fLow").value,
+      img:fImg,photo:fPhoto,imgChecked:picRemoved||!!(fImg||fPhoto)||(!!it.imgChecked&&code===it.barcode)};
     if(it.id)store.update(it.id,data);else store.add(data);
     closeSheet();
     toast(it.id?`Saved ${name}`:`Added ${name} · ${Math.max(0,parseInt(data.qty)||0)} on the shelf`);
