@@ -18,7 +18,7 @@
 :root{
   --bg:#F1F4F1; --surface:#FFFFFF; --ink:#18221E; --muted:#5B6A63; --line:#D9E0DB;
   --accent:#1E6A55; --accent-ink:#FFFFFF; --label:#F2C230; --label-ink:#1E1A08;
-  --warn:#B4471F; --warn-bg:#FBE9E1; --soft:#E6ECE8;
+  --warn:#B4471F; --warn-bg:#FBE9E1; --soft:#E6ECE8; --ok:#2E8B57; --pending:#C98A12;
   --f-display:"Familjen Grotesk",ui-sans-serif,system-ui,-apple-system,sans-serif;
   --f-body:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
@@ -27,21 +27,26 @@
 @media (prefers-color-scheme: dark){:root{
   --bg:#111715; --surface:#19211E; --ink:#E5ECE8; --muted:#94A49C; --line:#2A3531;
   --accent:#5CC3A3; --accent-ink:#0C1A15; --label:#E6BB3A; --label-ink:#1E1A08;
-  --warn:#F08A62; --warn-bg:#3A2219; --soft:#222C28; color-scheme:dark }}
+  --warn:#F08A62; --warn-bg:#3A2219; --soft:#222C28; --ok:#5CC38A; --pending:#E6BB3A; color-scheme:dark }}
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%}
 body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);padding:env(safe-area-inset-top,0px) 16px 0;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 .wrap{max-width:560px;margin:0 auto;padding-block:20px 150px;display:flex;flex-direction:column;gap:18px}
 .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.top>div{min-width:0}
 h1{font:700 1.75rem/1.1 var(--f-display);letter-spacing:-.01em;margin:0}
-.sub{color:var(--muted);margin:4px 0 0;font-size:.9rem}
+.sync{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:.88rem;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.dot.ok{background:var(--ok)} .dot.pending{background:var(--pending)} .dot.off{background:var(--warn)}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);font:600 .88rem var(--f-body);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .icon-btn{width:40px;height:40px;flex:none;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:1.2rem;cursor:pointer}
 .stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .stat{font-size:.8rem;padding:3px 10px;border-radius:999px;background:var(--soft);color:var(--muted);font-variant-numeric:tabular-nums}
 .stat b{color:var(--ink);font-weight:600}
 .stat.low{background:var(--warn-bg);color:var(--warn)} .stat.low b{color:var(--warn)}
 input,select{font:inherit;font-size:16px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+input[type=checkbox]{width:auto;accent-color:var(--accent)}
 input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
 .chip{flex:none;font:500 .8rem var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;padding:6px 12px;cursor:pointer}
@@ -74,14 +79,17 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .sheet-bg{position:fixed;inset:0;background:rgb(0 0 0 / .4);z-index:10;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--surface);width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;max-height:92%;overflow:auto}
 .sheet h2{font:700 1.3rem var(--f-display);margin:0}
+.sheet h3{font:600 .72rem var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:6px 0 0}
 .field{display:flex;flex-direction:column;gap:4px}
 .field label{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .btn{border:0;border-radius:10px;padding:11px 16px;font:600 .92rem var(--f-body);cursor:pointer;text-align:center}
 .btn.primary{background:var(--accent);color:var(--accent-ink);flex:1}
 .btn.plain{background:var(--soft);color:var(--ink)}
+.btn.outline{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
 .btn.danger{background:var(--warn-bg);color:var(--warn)}
+.btn.small{padding:6px 10px;font-size:.8rem;flex:none}
 .btn:disabled{opacity:.55;cursor:default}
 .note{font-size:.84rem;color:var(--muted);margin:0}
 .note.err{color:var(--warn)}
@@ -89,6 +97,17 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .barcode-strip{font-family:var(--f-mono);letter-spacing:.1em}
 .menu{display:flex;flex-direction:column;gap:8px}
 .menu .btn{text-align:left}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.8rem}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.panel{border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.members{display:flex;flex-direction:column}
+.member{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.member:first-child{border-top:0}
+.member .who{min-width:0;overflow-wrap:anywhere}
+.member small{display:block;color:var(--muted);font-size:.78rem}
+.invite{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.invite-code{font:500 1.4rem var(--f-mono);letter-spacing:.12em;user-select:all;-webkit-user-select:all}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:.9rem}
 
 .scanner{position:fixed;inset:0;background:#000;z-index:30;display:flex;flex-direction:column}
 .scanner video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
@@ -101,6 +120,7 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .scan-hit{background:#F2C230;color:#1E1A08;border-radius:12px;padding:10px 14px;text-align:center;font-weight:600}
 
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 14px;display:flex;gap:14px;align-items:center;z-index:40;max-width:calc(100% - 32px);font-size:.9rem;box-shadow:0 6px 20px rgb(0 0 0 / .2)}
+.toast.top{bottom:auto;top:calc(16px + env(safe-area-inset-top,0px))}
 .toast button{background:none;border:0;color:var(--label);font:600 .9rem var(--f-body);cursor:pointer;padding:0}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
 </style>
@@ -110,10 +130,10 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
   <header class="top">
     <div>
       <h1>Cabinet Count</h1>
-      <p class="sub">Scan a barcode to add or use up an item.</p>
+      <div class="sync" id="syncLine"></div>
       <div class="stats" id="stats"></div>
     </div>
-    <button class="icon-btn" id="menuBtn" aria-label="Backup and settings">⋯</button>
+    <button class="icon-btn" id="menuBtn" aria-label="Household, backup and settings">⋯</button>
   </header>
   <input id="q" type="search" placeholder="Search items or barcodes" aria-label="Search items">
   <div class="chips" id="chips" role="group" aria-label="Filter by location"></div>
@@ -155,21 +175,30 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 
 <script src="vendor/zxing.min.js"></script>
 <script>
+/* ===================== settings ===================== */
+// Firebase web config. Not a secret: access is controlled by firestore.rules.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD8vVkOEeV61uxbol1Jnp6_uY5NCdGyVJQ",
+  authDomain: "pantrycontents.firebaseapp.com",
+  projectId: "pantrycontents",
+  storageBucket: "pantrycontents.firebasestorage.app",
+  messagingSenderId: "424251350515",
+  appId: "1:424251350515:web:6e8450f2a08806353b4686"
+};
 const LOCS=["Cabinet","Pantry","Fridge","Freezer","Bathroom","Other"];
-const KEY="cabinet-count:v1";
+const LOCAL_KEY="cabinet-count:v1";
+const BACKUP_KEY="cabinet-count:v1:before-sharing";
+const CLOUD_FLAG="cabinet-count:signed-in";
+const APP_URL=location.origin+location.pathname.replace(/index\.html$/,"");
+
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const state={items:[],filter:"All",q:"",mode:"add"};
-
-/* ---------- storage (on this phone) ---------- */
-function load(){try{state.items=JSON.parse(localStorage.getItem(KEY)||"[]");}catch(e){state.items=[];}}
-function save(){
-  try{localStorage.setItem(KEY,JSON.stringify(state.items));}
-  catch(e){toast("Couldn't save. Your phone may be out of storage.");}
-}
+const state={items:[],filter:"All",q:"",mode:"add",loading:false};
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function lsSet(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v);return true;}catch(e){return false;}}
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
 
-/* ---------- barcode helpers ---------- */
+/* ===================== barcode helpers ===================== */
 function normCode(raw){
   let c=String(raw||"").trim().replace(/\s+/g,"");
   if(/^\d{13}$/.test(c)&&c[0]==="0")c=c.slice(1); // EAN-13 with a leading 0 is the same product as UPC-A
@@ -191,9 +220,20 @@ function prettyCode(c){
   return c;
 }
 const findByCode=c=>state.items.find(i=>i.barcode===c);
-const newId=()=>"it_"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const randId=()=>"it_"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const idForItem=d=>d.barcode?("bc_"+d.barcode.replace(/[^A-Za-z0-9]/g,"").slice(0,60)):randId();
+function cleanItem(d){
+  return{name:String(d.name||"").trim().slice(0,200)||"Unnamed item",barcode:normCode(d.barcode||"").slice(0,64),
+    location:!d.location?"Cabinet":LOCS.includes(d.location)?d.location:"Other",
+    qty:Math.max(0,parseInt(d.qty)||0),low:Math.max(0,parseInt(d.low)||0)};
+}
+function timeAgo(ts){
+  if(!ts)return"";const s=Math.round((Date.now()-ts)/1000);
+  if(s<60)return"just now";if(s<3600)return`${Math.round(s/60)} min ago`;
+  if(s<86400)return`${Math.round(s/3600)} h ago`;return`${Math.round(s/86400)} days ago`;
+}
 
-/* ---------- product lookup ---------- */
+/* ===================== product lookup ===================== */
 async function getJSON(url,ms=6000){
   const ctl=new AbortController();const t=setTimeout(()=>ctl.abort(),ms);
   try{const r=await fetch(url,{signal:ctl.signal});if(!r.ok)return null;return await r.json();}
@@ -201,7 +241,6 @@ async function getJSON(url,ms=6000){
 }
 async function lookup(code){
   if(!/^\d{8,14}$/.test(code)||!navigator.onLine)return null;
-  // Open Food Facts stores UPC-A codes as 13 digits with a leading 0, so try both
   for(const c of code.length===12?["0"+code,code]:[code]){
     const j=await getJSON(`https://world.openfoodfacts.org/api/v2/product/${c}.json?fields=product_name,brands,quantity`);
     const p=j&&j.status===1&&j.product;
@@ -217,62 +256,258 @@ async function lookup(code){
   return null;
 }
 
-/* ---------- counting ---------- */
-function setQty(id,qty){
-  const it=state.items.find(i=>i.id===id);if(!it)return;
-  it.qty=Math.max(0,Math.round(qty));it.updatedAt=Date.now();save();render();
-}
-function applyScan(code){
-  const hit=findByCode(code);if(!hit)return null;
-  const prev=hit.qty,next=state.mode==="add"?prev+1:Math.max(0,prev-1);
-  setQty(hit.id,next);
-  return{hit,prev,next};
+/* ===================== store: this phone only ===================== */
+const Local={
+  items:[],
+  load(){try{this.items=JSON.parse(lsGet(LOCAL_KEY)||"[]");}catch(e){this.items=[];}if(!Array.isArray(this.items))this.items=[];},
+  persist(){if(!lsSet(LOCAL_KEY,JSON.stringify(this.items)))toast("Couldn't save. Your phone may be out of storage.");},
+  emit(){if(store===this){state.items=this.items.map(i=>({...i}));render();}},
+  start(){this.load();this.emit();},
+  add(d){const id=randId();this.items.push({id,...cleanItem(d),updatedAt:Date.now()});this.persist();this.emit();return id;},
+  update(id,d){const it=this.items.find(i=>i.id===id);if(!it)return;Object.assign(it,cleanItem(d),{updatedAt:Date.now()});this.persist();this.emit();},
+  bump(id,delta){const it=this.items.find(i=>i.id===id);if(!it)return;it.qty=Math.max(0,(it.qty||0)+delta);it.updatedAt=Date.now();this.persist();this.emit();},
+  remove(id){this.items=this.items.filter(i=>i.id!==id);this.persist();this.emit();},
+  restore(item){this.items.push({...item,...cleanItem(item)});this.persist();this.emit();},
+  async replaceAll(items){this.items=items.map(i=>({id:i.id||randId(),...cleanItem(i),updatedAt:Date.now()}));this.persist();this.emit();}
+};
+
+/* ===================== store: shared household (Firebase) ===================== */
+const Cloud={
+  fb:null,auth:null,db:null,user:null,
+  hid:null,household:null,members:[],pending:false,fromCache:true,
+  userUnsub:null,unsubs:[],importQueue:null,
+
+  async init(){
+    if(this.fb)return;
+    const fb=await import("./vendor/firebase.js");
+    const app=fb.initializeApp(FIREBASE_CONFIG);
+    this.auth=fb.initializeAuth(app,{persistence:[fb.indexedDBLocalPersistence,fb.browserLocalPersistence],popupRedirectResolver:fb.browserPopupRedirectResolver});
+    try{this.db=fb.initializeFirestore(app,{localCache:fb.persistentLocalCache({tabManager:fb.persistentMultipleTabManager()})});}
+    catch(e){this.db=fb.initializeFirestore(app,{});}
+    if(location.hostname==="localhost"&&new URLSearchParams(location.search).has("emulator")){
+      fb.connectAuthEmulator(this.auth,"http://localhost:9099",{disableWarnings:true});
+      fb.connectFirestoreEmulator(this.db,"localhost",8080);
+    }
+    this.fb=fb;
+    await new Promise(res=>{let first=true;fb.onAuthStateChanged(this.auth,u=>{this.onUser(u);if(first){first=false;res();}});});
+  },
+  myName(){
+    const u=this.user;if(!u)return"Someone";
+    if(u.displayName)return u.displayName.split(" ")[0];
+    const e=(u.email||"").split("@")[0];return e?e.charAt(0).toUpperCase()+e.slice(1):"Someone";
+  },
+  onUser(u){
+    this.stopUser();this.detach();this.user=u;
+    if(!u){lsSet(CLOUD_FLAG,null);switchStore(Local);return;}
+    lsSet(CLOUD_FLAG,"1");
+    const fb=this.fb;let decided=false;
+    this.userUnsub=fb.onSnapshot(fb.doc(this.db,"users",u.uid),{includeMetadataChanges:true},snap=>{
+      const hid=snap.exists()?(snap.data().householdId||null):null;
+      if(!hid&&snap.metadata.fromCache&&navigator.onLine)return; // wait for the server before deciding there's no household
+      if(!decided||hid!==this.hid){decided=true;this.attach(hid);}
+      else renderSync();
+    },err=>{console.warn(err);toast("Couldn't load your account. Check your connection and reopen the app.");switchStore(Local);});
+  },
+  stopUser(){if(this.userUnsub){this.userUnsub();this.userUnsub=null;}},
+  detach(){this.unsubs.forEach(f=>f());this.unsubs=[];this.hid=null;this.household=null;this.members=[];},
+  attach(hid){
+    this.detach();
+    if(!hid){switchStore(Local);openHouseholdSetup();return;}
+    const fb=this.fb,db=this.db;
+    this.hid=hid;this.pending=false;this.fromCache=true;
+    state.items=[];state.loading=true;switchStore(this);
+    const refreshMenu=()=>{if($("#householdPanel"))openMenu();};
+    const lost=err=>{if(err&&err.code==="permission-denied")this.lostAccess();else{console.warn(err);renderSync();}};
+    this.unsubs.push(fb.onSnapshot(fb.doc(db,"households",hid),s=>{this.household=s.exists()?s.data():null;renderSync();refreshMenu();},lost));
+    this.unsubs.push(fb.onSnapshot(fb.collection(db,"households",hid,"members"),s=>{this.members=s.docs.map(d=>({uid:d.id,...d.data()}));renderSync();refreshMenu();},lost));
+    this.unsubs.push(fb.onSnapshot(fb.collection(db,"households",hid,"items"),{includeMetadataChanges:true},s=>{
+      this.pending=s.metadata.hasPendingWrites;this.fromCache=s.metadata.fromCache;
+      state.items=s.docs.map(d=>({id:d.id,...d.data()}));state.loading=false;
+      render();
+      if(this.importQueue&&!s.metadata.fromCache)this.runImport();
+    },lost));
+  },
+  lostAccess(){
+    if(!this.hid)return;
+    this.detach();
+    toast("You're no longer part of that household.");
+    if(this.user)this.fb.setDoc(this.fb.doc(this.db,"users",this.user.uid),{householdId:null}).catch(()=>{});
+    switchStore(Local);
+  },
+  ref(id){return this.fb.doc(this.db,"households",this.hid,"items",id);},
+  stamp(){return{updatedAt:Date.now(),updatedBy:this.user.uid,updatedByName:this.myName()};},
+  fail(e){
+    console.warn(e);
+    toast(e&&e.code==="permission-denied"?"The shared list refused that change. The database rules may need updating.":"Couldn't save that change. Try again.");
+  },
+  add(d){const c=cleanItem(d),id=idForItem(c);this.fb.setDoc(this.ref(id),{...c,...this.stamp()}).catch(e=>this.fail(e));return id;},
+  update(id,d){this.fb.setDoc(this.ref(id),{...cleanItem(d),...this.stamp()}).catch(e=>this.fail(e));},
+  bump(id,delta){this.fb.updateDoc(this.ref(id),{qty:this.fb.increment(delta),...this.stamp()}).catch(e=>this.fail(e));},
+  remove(id){this.fb.deleteDoc(this.ref(id)).catch(e=>this.fail(e));},
+  restore(item){this.fb.setDoc(this.ref(item.id),{...cleanItem(item),...this.stamp()}).catch(e=>this.fail(e));},
+  async writeChunks(ops){
+    for(let i=0;i<ops.length;i+=400){
+      const b=this.fb.writeBatch(this.db);
+      ops.slice(i,i+400).forEach(o=>o.del?b.delete(o.ref):b.set(o.ref,o.data));
+      await b.commit();
+    }
+  },
+  async replaceAll(items){
+    const keep=new Set(),ops=[];
+    for(const i of items){
+      const c=cleanItem(i),id=i.id&&/^[A-Za-z0-9_\-]{1,100}$/.test(i.id)?i.id:idForItem(c);
+      if(keep.has(id))continue;keep.add(id);ops.push({ref:this.ref(id),data:{...c,...this.stamp()}});
+    }
+    for(const i of state.items)if(!keep.has(i.id))ops.push({ref:this.ref(i.id),del:true});
+    try{await this.writeChunks(ops);}catch(e){this.fail(e);}
+  },
+  // Items from this phone go into the shared list once, skipping anything already there.
+  async runImport(){
+    const queue=this.importQueue;this.importQueue=null;if(!queue||!queue.length)return;
+    const haveCodes=new Set(state.items.map(i=>i.barcode).filter(Boolean));
+    const haveNames=new Set(state.items.filter(i=>!i.barcode).map(i=>(i.name||"").toLowerCase()));
+    const seen=new Set(),ops=[];
+    for(const i of queue){
+      const c=cleanItem(i),key=c.barcode||("name:"+c.name.toLowerCase());
+      if(seen.has(key)||(c.barcode?haveCodes.has(c.barcode):haveNames.has(c.name.toLowerCase())))continue;
+      seen.add(key);ops.push({ref:this.ref(idForItem(c)),data:{...c,...this.stamp()}});
+    }
+    try{
+      await this.writeChunks(ops);
+      lsSet(BACKUP_KEY,JSON.stringify(queue));lsSet(LOCAL_KEY,"[]");Local.load();
+      if(ops.length)toast(`Moved ${ops.length} ${ops.length===1?"item":"items"} from this phone into the shared list`);
+    }catch(e){this.importQueue=queue;this.fail(e);}
+  },
+  // ---------- household management ----------
+  makeCode(){
+    const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",b=new Uint8Array(8);crypto.getRandomValues(b);
+    return Array.from(b,x=>A[x%32]).join("");
+  },
+  async createHousehold(name){
+    const fb=this.fb,db=this.db,uid=this.user.uid,hid=fb.doc(fb.collection(db,"households")).id,code=this.makeCode(),now=Date.now();
+    const b=fb.writeBatch(db);
+    b.set(fb.doc(db,"households",hid),{name,owner:uid,inviteCode:code,createdAt:now});
+    b.set(fb.doc(db,"households",hid,"members",uid),{role:"owner",name:this.myName(),email:this.user.email||"",joinedAt:now});
+    b.set(fb.doc(db,"invites",code),{householdId:hid,householdName:name,createdBy:uid,createdAt:now});
+    await b.commit(); // the household exists on the server before this phone starts listening to it
+    this.importQueue=Local.items.slice();
+    await fb.setDoc(fb.doc(db,"users",uid),{householdId:hid});
+  },
+  async findInvite(code){
+    const s=await this.fb.getDocFromServer(this.fb.doc(this.db,"invites",code));
+    return s.exists()?s.data():null;
+  },
+  async joinHousehold(code,invite,importLocal){
+    const fb=this.fb,db=this.db,uid=this.user.uid;
+    await fb.setDoc(fb.doc(db,"households",invite.householdId,"members",uid),{role:"member",code,name:this.myName(),email:this.user.email||"",joinedAt:Date.now()});
+    if(importLocal)this.importQueue=Local.items.slice();
+    await fb.setDoc(fb.doc(db,"users",uid),{householdId:invite.householdId});
+  },
+  async newInvite(){
+    const fb=this.fb,db=this.db,h=this.household,code=this.makeCode();
+    const b=fb.writeBatch(db);
+    if(h.inviteCode)b.delete(fb.doc(db,"invites",h.inviteCode));
+    b.set(fb.doc(db,"invites",code),{householdId:this.hid,householdName:h.name,createdBy:this.user.uid,createdAt:Date.now()});
+    b.update(fb.doc(db,"households",this.hid),{inviteCode:code});
+    await b.commit();
+  },
+  async removeMember(uid){await this.fb.deleteDoc(this.fb.doc(this.db,"households",this.hid,"members",uid));},
+  async leave(){
+    const fb=this.fb,uid=this.user.uid,hid=this.hid;
+    this.detach();switchStore(Local);
+    await fb.deleteDoc(fb.doc(this.db,"households",hid,"members",uid));
+    await fb.setDoc(fb.doc(this.db,"users",uid),{householdId:null});
+  },
+  async signOut(){
+    this.stopUser();this.detach();lsSet(CLOUD_FLAG,null);
+    try{await this.fb.signOut(this.auth);}catch(e){}
+    try{await this.fb.terminate(this.db);await this.fb.clearIndexedDbPersistence(this.db);}catch(e){}
+    location.reload();
+  }
+};
+
+let store=Local;
+function switchStore(s){
+  store=s;
+  if(s===Local){state.loading=false;Local.start();}
+  else render();
 }
 
-/* ---------- render ---------- */
+/* ===================== sync status line ===================== */
+function renderSync(){
+  const el=$("#syncLine");
+  if(store===Local){
+    if(state.loading){el.innerHTML=`<span class="dot"></span><span>Connecting…</span>`;return;}
+    if(Cloud.user&&!Cloud.hid){el.innerHTML=`<span class="dot pending"></span><span>Signed in. Finish setting up your household.</span><button class="linkbtn" id="setupLink">Set up</button>`;$("#setupLink").onclick=openHouseholdSetup;return;}
+    el.innerHTML=`<span class="dot"></span><span>Saved on this phone only.</span><button class="linkbtn" id="shareLink">Share with your household</button>`;
+    $("#shareLink").onclick=openSignIn;return;
+  }
+  const h=Cloud.household,others=Cloud.members.filter(m=>m.uid!==Cloud.user?.uid).map(m=>m.name).filter(Boolean);
+  const who=others.length?`Shared with ${others.join(", ")}`:"Only you so far";
+  let dot="ok",status="Synced";
+  if(!navigator.onLine){dot="off";status=Cloud.pending?"Offline · changes will sync":"Offline";}
+  else if(Cloud.pending){dot="pending";status="Saving…";}
+  else if(Cloud.fromCache){dot="pending";status="Connecting…";}
+  el.innerHTML=`<span class="dot ${dot}"></span><span>${esc(h?h.name:"Household")} · ${esc(who)} · ${status}</span>`;
+}
+addEventListener("online",renderSync);addEventListener("offline",renderSync);
+
+/* ===================== counting ===================== */
+function bump(id,delta){
+  const it=state.items.find(i=>i.id===id);if(!it)return null;
+  const prev=Math.max(0,it.qty||0);
+  if(delta<0&&prev===0)return{it,prev,next:0};
+  store.bump(id,delta);
+  return{it,prev,next:Math.max(0,prev+delta)};
+}
+
+/* ===================== render ===================== */
 function render(){
-  const all=state.items,low=all.filter(i=>i.qty<=(i.low??0));
-  const units=all.reduce((s,i)=>s+(i.qty||0),0);
+  renderSync();
+  const all=state.items,low=all.filter(i=>(i.qty||0)<=(i.low??0));
+  const units=all.reduce((s,i)=>s+Math.max(0,i.qty||0),0);
   $("#stats").innerHTML=all.length?`<span class="stat"><b>${all.length}</b> ${all.length===1?"item":"items"}</span><span class="stat"><b>${units}</b> on the shelf</span>${low.length?`<span class="stat low"><b>${low.length}</b> low or out</span>`:""}`:"";
   const locs=["All",...LOCS.filter(l=>all.some(i=>i.location===l))];
   if(low.length)locs.splice(1,0,"Low");
   if(!locs.includes(state.filter))state.filter="All";
   $("#chips").innerHTML=all.length?locs.map(l=>`<button class="chip" data-f="${esc(l)}" aria-pressed="${l===state.filter}">${l==="Low"?"Running low":esc(l)}</button>`).join(""):"";
   const q=state.q.toLowerCase();
-  const rows=all.filter(i=>state.filter==="All"||(state.filter==="Low"?i.qty<=(i.low??0):i.location===state.filter))
+  const rows=all.filter(i=>state.filter==="All"||(state.filter==="Low"?(i.qty||0)<=(i.low??0):i.location===state.filter))
     .filter(i=>!q||(i.name||"").toLowerCase().includes(q)||(i.barcode||"").includes(q))
     .sort((a,b)=>(a.name||"").localeCompare(b.name||""));
-  if(!all.length){$("#listHost").innerHTML=`<div class="list"><div class="empty"><h2>Your cabinet is empty</h2>Tap <b>Scan barcode</b> and hold a can or box up to the camera. The app looks up what it is, you confirm the name, and every scan after that adds one.</div></div>`;return;}
+  if(state.loading&&!all.length){$("#listHost").innerHTML=`<div class="list"><div class="empty">Loading your household's list…</div></div>`;return;}
+  if(!all.length){$("#listHost").innerHTML=`<div class="list"><div class="empty"><h2>${store===Cloud?"Your shared list is empty":"Your cabinet is empty"}</h2>Tap <b>Scan barcode</b> and hold a can or box up to the camera. The app looks up what it is, you confirm the name, and every scan after that adds one.</div></div>`;return;}
   if(!rows.length){$("#listHost").innerHTML=`<div class="list"><div class="empty">Nothing matches that search.</div></div>`;return;}
-  $("#listHost").innerHTML=`<div class="list">${rows.map(i=>{const isLow=i.qty<=(i.low??0);return`
-    <div class="row"><button class="main" data-edit="${i.id}">
+  $("#listHost").innerHTML=`<div class="list">${rows.map(i=>{const qty=Math.max(0,i.qty||0),isLow=qty<=(i.low??0);return`
+    <div class="row"><button class="main" data-edit="${esc(i.id)}">
       <div class="name">${esc(i.name||"Unnamed item")}</div>
-      <div class="meta"><span>${esc(i.location||"Cabinet")}</span>${i.barcode?`<span class="code">${esc(prettyCode(i.barcode))}</span>`:""}${isLow?`<span class="tag">${i.qty===0?"Out":"Low"}</span>`:""}</div>
+      <div class="meta"><span>${esc(i.location||"Cabinet")}</span>${i.barcode?`<span class="code">${esc(prettyCode(i.barcode))}</span>`:""}${isLow?`<span class="tag">${qty===0?"Out":"Low"}</span>`:""}</div>
     </button><div class="stepper">
-      <button data-dec="${i.id}" aria-label="Use one ${esc(i.name)}">−</button>
-      <span class="qty ${i.qty===0?"zero":""}">${i.qty}</span>
-      <button data-inc="${i.id}" aria-label="Add one ${esc(i.name)}">+</button>
+      <button data-dec="${esc(i.id)}" aria-label="Use one ${esc(i.name)}">−</button>
+      <span class="qty ${qty===0?"zero":""}">${qty}</span>
+      <button data-inc="${esc(i.id)}" aria-label="Add one ${esc(i.name)}">+</button>
     </div></div>`;}).join("")}</div>`;
 }
 
-/* ---------- toast ---------- */
+/* ===================== toast & sheets ===================== */
 let toastTimer;
 function toast(msg,undo){
   clearTimeout(toastTimer);
-  $("#toastHost").innerHTML=`<div class="toast" role="status"><span>${esc(msg)}</span>${undo?`<button id="undoBtn">Undo</button>`:""}</div>`;
+  $("#toastHost").innerHTML=`<div class="toast${$("#sheetBg")?" top":""}" role="status"><span>${esc(msg)}</span>${undo?`<button id="undoBtn">Undo</button>`:""}</div>`;
   if(undo)$("#undoBtn").onclick=()=>{undo();$("#toastHost").innerHTML="";};
   toastTimer=setTimeout(()=>$("#toastHost").innerHTML="",5000);
 }
-
-/* ---------- sheets ---------- */
 function closeSheet(){$("#sheetHost").innerHTML="";}
 function openSheet(html){
   $("#sheetHost").innerHTML=`<div class="sheet-bg" id="sheetBg"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
   $("#sheetBg").addEventListener("click",e=>{if(e.target.id==="sheetBg")closeSheet();});
 }
+function armed(btn,label){if(btn.dataset.armed)return true;btn.dataset.armed="1";btn.textContent=label;return false;}
 
+/* ===================== add / edit item ===================== */
 function itemForm({title,item,note,lookupCode}){
   const it=item||{};
+  const changed=store===Cloud&&it.updatedByName&&it.updatedAt?`<p class="note">Last changed by ${esc(it.updatedBy===Cloud.user?.uid?"you":it.updatedByName)}, ${timeAgo(it.updatedAt)}</p>`:"";
   openSheet(`
     <h2>${esc(title)}</h2>
     ${note?`<p class="note ${note.err?"err":""}">${esc(note.text)}</p>`:""}
@@ -281,9 +516,10 @@ function itemForm({title,item,note,lookupCode}){
     <button class="btn plain" id="lookBtn">Look up this barcode</button>
     <div class="two">
       <div class="field"><label for="fLoc">Where</label><select id="fLoc">${LOCS.map(l=>`<option ${l===(it.location||"Cabinet")?"selected":""}>${l}</option>`).join("")}</select></div>
-      <div class="field"><label for="fQty">How many</label><input id="fQty" type="number" min="0" inputmode="numeric" value="${it.qty??1}"></div>
+      <div class="field"><label for="fQty">How many</label><input id="fQty" type="number" min="0" inputmode="numeric" value="${Math.max(0,it.qty??1)}"></div>
     </div>
     <div class="field"><label for="fLow">Flag as low at</label><input id="fLow" type="number" min="0" inputmode="numeric" value="${it.low??1}"></div>
+    ${changed}
     <p class="note err" id="formErr" hidden></p>
     <div class="btns">
       ${it.id?`<button class="btn danger" id="delBtn">Delete</button>`:""}
@@ -298,7 +534,7 @@ function itemForm({title,item,note,lookupCode}){
     const c=normCode($("#fCode").value),b=$("#lookBtn"),f=$("#foundNote");
     b.disabled=true;b.textContent="Looking it up…";
     const r=await lookup(c);
-    if(!$("#lookBtn"))return; // sheet closed meanwhile
+    if(!$("#lookBtn"))return;
     b.disabled=false;b.textContent="Look up this barcode";
     if(r){if(!$("#fName").value.trim()||$("#fName").dataset.auto){$("#fName").value=r.name;$("#fName").dataset.auto="1";}
       f.textContent=`Found on ${r.source}. Edit the name if you like.`;f.className="found";}
@@ -309,26 +545,259 @@ function itemForm({title,item,note,lookupCode}){
   $("#fName").oninput=e=>delete e.target.dataset.auto;
   $("#cancelBtn").onclick=closeSheet;
   if($("#delBtn"))$("#delBtn").onclick=e=>{
-    if(e.target.dataset.armed){const idx=state.items.findIndex(x=>x.id===it.id);const [gone]=state.items.splice(idx,1);save();render();closeSheet();
-      toast(`Deleted ${gone.name||"item"}`,()=>{state.items.push(gone);save();render();});}
-    else{e.target.dataset.armed="1";e.target.textContent="Tap again to delete";}
+    if(!armed(e.target,"Tap again to delete"))return;
+    const gone={...state.items.find(x=>x.id===it.id)};store.remove(it.id);closeSheet();
+    toast(`Deleted ${gone.name||"item"}`,()=>store.restore(gone));
   };
   $("#saveBtn").onclick=()=>{
     const name=$("#fName").value.trim(),code=normCode($("#fCode").value),err=$("#formErr");
     if(!name){err.textContent="Give the item a name so you can find it later.";err.hidden=false;$("#fName").focus();return;}
     const dupe=code&&findByCode(code);
     if(dupe&&dupe.id!==it.id){err.textContent=`That barcode already belongs to ${dupe.name}.`;err.hidden=false;return;}
-    const data={name,barcode:code||"",location:$("#fLoc").value,qty:Math.max(0,parseInt($("#fQty").value)||0),low:Math.max(0,parseInt($("#fLow").value)||0),updatedAt:Date.now()};
-    if(it.id)Object.assign(state.items.find(x=>x.id===it.id),data);
-    else state.items.push({id:newId(),...data});
-    save();render();closeSheet();
-    toast(it.id?`Saved ${name}`:`Added ${name} · ${data.qty} on the shelf`);
+    const data={name,barcode:code,location:$("#fLoc").value,qty:$("#fQty").value,low:$("#fLow").value};
+    if(it.id)store.update(it.id,data);else store.add(data);
+    closeSheet();
+    toast(it.id?`Saved ${name}`:`Added ${name} · ${Math.max(0,parseInt(data.qty)||0)} on the shelf`);
   };
   if(lookupCode)doLookup();
   else if(!it.name)setTimeout(()=>$("#fName")?.focus(),250);
 }
 
-/* ---------- live scanner ---------- */
+/* ===================== sign in ===================== */
+function authMsg(e){
+  const c=e&&e.code||"";
+  return({
+    "auth/invalid-credential":"That email and password don't match. Check them, or tap Create an account if you're new.",
+    "auth/invalid-login-credentials":"That email and password don't match. Check them, or tap Create an account if you're new.",
+    "auth/wrong-password":"That password isn't right.",
+    "auth/user-not-found":"No account uses that email. Tap Create an account.",
+    "auth/email-already-in-use":"An account already uses that email. Sign in instead.",
+    "auth/invalid-email":"That email address doesn't look right.",
+    "auth/weak-password":"Use a password with at least 6 characters.",
+    "auth/missing-password":"Enter your password.",
+    "auth/too-many-requests":"Too many tries. Wait a few minutes and try again.",
+    "auth/network-request-failed":"You're offline. Connect to the internet to sign in.",
+    "auth/popup-blocked":"Your browser blocked the Google window. Try again, or use email instead.",
+    "auth/operation-not-allowed":"This sign-in method isn't turned on in Firebase yet (Authentication → Sign-in method).",
+    "auth/unauthorized-domain":"This address isn't allowed to sign in yet. Add it under Firebase Authentication → Settings → Authorized domains."
+  })[c]||`Sign-in didn't work${c?` (${c.replace("auth/","")})`:""}. Try again.`;
+}
+async function ensureCloud(){
+  if(Cloud.fb)return true;
+  try{await Cloud.init();return true;}
+  catch(e){console.warn(e);toast("Couldn't load sharing. Check your connection and try again.");return false;}
+}
+function openSignIn(){
+  let mode="signin";
+  const standaloneIOS=navigator.standalone===true;
+  const draw=()=>{
+    openSheet(`
+      <h2>Share with your household</h2>
+      <p class="note">Sign in so everyone in your home sees the same list, and every scan syncs between phones. Items already on this phone move into the shared list.</p>
+      <button class="btn outline" id="gBtn">Continue with Google</button>
+      ${standaloneIOS?`<p class="note">If Google sign-in doesn't return to the app on your iPhone, use email instead.</p>`:""}
+      <div class="or">or use email</div>
+      ${mode==="create"?`<div class="field"><label for="aName">Your first name</label><input id="aName" autocomplete="given-name" placeholder="Shown to your household"></div>`:""}
+      <div class="field"><label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email" inputmode="email"></div>
+      <div class="field"><label for="aPass">Password</label><input id="aPass" type="password" autocomplete="${mode==="create"?"new-password":"current-password"}" placeholder="${mode==="create"?"At least 6 characters":""}"></div>
+      <p class="note err" id="aErr" hidden></p>
+      <div class="btns"><button class="btn plain" id="aCancel">Cancel</button><button class="btn primary" id="aGo">${mode==="create"?"Create account":"Sign in"}</button></div>
+      <div class="btns" style="justify-content:space-between"><button class="linkbtn" id="aMode">${mode==="create"?"Already have an account? Sign in":"New here? Create an account"}</button>${mode==="signin"?`<button class="linkbtn" id="aReset">Forgot password?</button>`:""}</div>`);
+    const err=m=>{$("#aErr").textContent=m;$("#aErr").hidden=!m;};
+    const busy=(b,on,label)=>{b.disabled=on;if(label)b.textContent=label;};
+    $("#aCancel").onclick=closeSheet;
+    $("#aMode").onclick=()=>{mode=mode==="create"?"signin":"create";draw();};
+    $("#gBtn").onclick=async e=>{
+      err("");if(!navigator.onLine)return err("You're offline. Connect to the internet to sign in.");
+      busy(e.target,true,"Opening Google…");
+      if(!await ensureCloud())return busy(e.target,false,"Continue with Google");
+      try{await Cloud.fb.signInWithPopup(Cloud.auth,new Cloud.fb.GoogleAuthProvider());if($("#gBtn"))closeSheet();}
+      catch(x){if(!$("#gBtn"))return;busy(e.target,false,"Continue with Google");if(x.code!=="auth/popup-closed-by-user"&&x.code!=="auth/cancelled-popup-request")err(authMsg(x));}
+    };
+    $("#aGo").onclick=async e=>{
+      err("");const email=$("#aEmail").value.trim(),pass=$("#aPass").value;
+      if(!email||!pass)return err("Enter your email and password.");
+      if(!navigator.onLine)return err("You're offline. Connect to the internet to sign in.");
+      const label=e.target.textContent;busy(e.target,true,"One moment…");
+      if(!await ensureCloud())return busy(e.target,false,label);
+      try{
+        if(mode==="create"){
+          const name=($("#aName").value||"").trim();
+          const cred=await Cloud.fb.createUserWithEmailAndPassword(Cloud.auth,email,pass);
+          if(name)await Cloud.fb.updateProfile(cred.user,{displayName:name});
+        }else await Cloud.fb.signInWithEmailAndPassword(Cloud.auth,email,pass);
+        if($("#aGo"))closeSheet();
+      }catch(x){if(!$("#aGo"))return;busy(e.target,false,label);err(authMsg(x));}
+    };
+    if($("#aReset"))$("#aReset").onclick=async()=>{
+      const email=$("#aEmail").value.trim();if(!email)return err("Type your email first, then tap Forgot password.");
+      if(!await ensureCloud())return;
+      try{await Cloud.fb.sendPasswordResetEmail(Cloud.auth,email);err("");toast("Check your email for a link to reset your password.");}
+      catch(x){err(authMsg(x));}
+    };
+  };
+  draw();
+}
+
+/* ===================== household setup ===================== */
+function fmtInvite(c){return c?c.slice(0,4)+"-"+c.slice(4):"";}
+function openHouseholdSetup(){
+  if(!Cloud.user)return;
+  const localCount=Local.items.length;
+  openSheet(`
+    <h2>Set up your household</h2>
+    <p class="note">Start a new shared list, or join the one someone in your home already made.</p>
+    <div class="panel">
+      <div class="field"><label for="hName">Household name</label><input id="hName" value="Our home" maxlength="60"></div>
+      ${localCount?`<p class="note">The ${localCount} ${localCount===1?"item":"items"} on this phone will move into it.</p>`:""}
+      <button class="btn primary" id="hCreate">Start a household</button>
+    </div>
+    <div class="or">or</div>
+    <div class="panel" id="joinPanel">
+      <div class="field"><label for="hCode">Invite code</label><input id="hCode" class="barcode-strip" placeholder="ABCD-EFGH" autocapitalize="characters" autocomplete="off" maxlength="9"></div>
+      <button class="btn outline" id="hFind">Join a household</button>
+    </div>
+    <p class="note err" id="hErr" hidden></p>
+    <div class="btns" style="justify-content:space-between"><button class="btn plain" id="hLater">Not now</button><button class="linkbtn" id="hOut">Sign out</button></div>`);
+  const err=m=>{$("#hErr").textContent=m;$("#hErr").hidden=!m;};
+  $("#hLater").onclick=closeSheet;
+  $("#hOut").onclick=()=>Cloud.signOut();
+  $("#hCreate").onclick=async e=>{
+    err("");const name=$("#hName").value.trim()||"Our home";
+    if(!navigator.onLine)return err("You're offline. Connect to the internet to set up sharing.");
+    e.target.disabled=true;e.target.textContent="Setting up…";
+    try{await Cloud.createHousehold(name);closeSheet();toast(`${name} is ready. Open ⋯ to invite someone.`);}
+    catch(x){console.warn(x);if(!$("#hCreate"))return;e.target.disabled=false;e.target.textContent="Start a household";
+      err(x.code==="permission-denied"?"Firebase refused to create the household. Check that the security rules are published (Firestore Database → Rules).":"Couldn't create the household. Check your connection and try again.");}
+  };
+  $("#hFind").onclick=async e=>{
+    err("");const code=$("#hCode").value.toUpperCase().replace(/[^A-Z0-9]/g,"");
+    if(code.length!==8)return err("Invite codes are 8 letters and numbers, like ABCD-EFGH.");
+    if(!navigator.onLine)return err("You're offline. Connect to the internet to join.");
+    e.target.disabled=true;e.target.textContent="Checking…";
+    let inv=null;
+    try{inv=await Cloud.findInvite(code);}
+    catch(x){console.warn(x);e.target.disabled=false;e.target.textContent="Join a household";
+      return err(x.code==="permission-denied"?"Firebase refused the lookup. Check that the security rules are published.":"Couldn't check that code. Check your connection and try again.");}
+    e.target.disabled=false;e.target.textContent="Join a household";
+    if(!inv)return err("No household uses that code. Ask for the current one: it changes when someone makes a new code.");
+    $("#joinPanel").innerHTML=`
+      <p style="margin:0">Join <b>${esc(inv.householdName||"this household")}</b>?</p>
+      ${localCount?`<label class="check"><input type="checkbox" id="hImport"> <span>Also add the ${localCount} ${localCount===1?"item":"items"} on this phone to the shared list</span></label>`:""}
+      <div class="btns"><button class="btn plain" id="hBack">Back</button><button class="btn primary" id="hJoin">Join</button></div>`;
+    $("#hBack").onclick=openHouseholdSetup;
+    $("#hJoin").onclick=async ev=>{
+      ev.target.disabled=true;ev.target.textContent="Joining…";
+      try{await Cloud.joinHousehold(code,inv,!!($("#hImport")&&$("#hImport").checked));closeSheet();toast(`You're in ${inv.householdName||"the household"}.`);}
+      catch(x){console.warn(x);if(!$("#hJoin"))return;ev.target.disabled=false;ev.target.textContent="Join";
+        err(x.code==="permission-denied"?"That code was just replaced. Ask for the new one.":"Couldn't join. Check your connection and try again.");}
+    };
+  };
+}
+
+/* ===================== menu: household + backup ===================== */
+function download(name,text,type){
+  const url=URL.createObjectURL(new Blob([text],{type}));
+  const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+const stampDate=()=>new Date().toISOString().slice(0,10);
+const withId=i=>({id:i.id,...cleanItem(i)});
+function csv(){
+  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  return["name,barcode,location,qty,low_at"].concat(state.items.map(i=>[q(i.name),q(i.barcode),q(i.location),Math.max(0,i.qty||0),i.low??0].join(","))).join("\n");
+}
+async function copyText(t){
+  try{await navigator.clipboard.writeText(t);toast("Invite copied. Paste it into a text message.");}
+  catch(e){toast("Couldn't copy. Press and hold the code to copy it.");}
+}
+function householdSection(){
+  if(!Cloud.user)return`
+    <h3>Household sharing</h3>
+    <p class="note">Your list is saved on this phone only. Sign in to share it with the people you live with.</p>
+    <button class="btn primary" id="mSignIn">Share with your household</button>`;
+  if(!Cloud.hid)return`
+    <h3>Household sharing</h3>
+    <p class="note">Signed in as ${esc(Cloud.user.email||Cloud.myName())}. You haven't joined a household yet.</p>
+    <div class="btns"><button class="btn primary" id="mSetup">Set up household</button><button class="btn plain" id="mOut">Sign out</button></div>`;
+  const h=Cloud.household||{},me=Cloud.user.uid,isOwner=h.owner===me;
+  const members=Cloud.members.slice().sort((a,b)=>(a.role==="owner"?0:1)-(b.role==="owner"?0:1));
+  return`
+    <div id="householdPanel" hidden></div>
+    <h3>${esc(h.name||"Household")}</h3>
+    <div class="members">${members.map(m=>`
+      <div class="member"><div class="who">${esc(m.name||"Someone")}${m.uid===me?" (you)":""}<small>${esc(m.email||"")}${m.role==="owner"?" · started the household":""}</small></div>
+      ${isOwner&&m.uid!==me?`<button class="btn danger small" data-remove="${esc(m.uid)}">Remove</button>`:""}</div>`).join("")}</div>
+    <div class="panel">
+      <p class="note">To add someone, send them the invite. They open the app, sign in, tap Join a household, and enter this code.</p>
+      <div class="invite"><span class="invite-code">${esc(fmtInvite(h.inviteCode))}</span>
+        <div class="btns"><button class="btn primary small" id="mShare">Send invite</button><button class="btn plain small" id="mNewCode">New code</button></div></div>
+    </div>
+    <div class="btns"><button class="btn plain" id="mLeave">Leave household</button><button class="btn plain" id="mOut">Sign out</button></div>
+    <p class="note">Signed in as ${esc(Cloud.user.email||Cloud.myName())}</p>`;
+}
+function openMenu(){
+  openSheet(`
+    ${householdSection()}
+    <h3>Backup</h3>
+    <p class="note">${store===Cloud?"The shared list lives in your household's online database. A backup file is a snapshot you can keep.":"Your items are stored only on this phone. Save a backup now and then, or before switching phones."}</p>
+    <div class="menu">
+      <button class="btn plain" id="mBackup">Save backup file</button>
+      <button class="btn plain" id="mRestore">${store===Cloud?"Replace the shared list from a backup":"Restore from backup"}</button>
+      <button class="btn plain" id="mCsv">Export spreadsheet (CSV)</button>
+      <button class="btn danger" id="mClear">${store===Cloud?"Delete everything in the shared list":"Delete all items"}</button>
+    </div>
+    <button class="btn plain" id="mClose">Close</button>`);
+  const on=(id,fn)=>{const el=$(id);if(el)el.onclick=fn;};
+  on("#mSignIn",openSignIn);
+  on("#mSetup",openHouseholdSetup);
+  on("#mOut",e=>{if(armed(e.target,"Tap again to sign out"))Cloud.signOut();});
+  on("#mShare",async()=>{
+    const code=fmtInvite(Cloud.household?.inviteCode);
+    const text=`Join our household on Cabinet Count. Open ${APP_URL} on your phone, sign in, tap "Join a household", and enter this code: ${code}`;
+    if(navigator.share){try{await navigator.share({title:"Cabinet Count invite",text});return;}catch(e){if(e.name==="AbortError")return;}}
+    copyText(text);
+  });
+  on("#mNewCode",async e=>{
+    if(!armed(e.target,"Tap again: old code stops working"))return;
+    e.target.disabled=true;
+    try{await Cloud.newInvite();toast("New invite code made. The old one no longer works.");}
+    catch(x){console.warn(x);toast("Couldn't make a new code. Try again.");}
+  });
+  on("#mLeave",async e=>{
+    if(!armed(e.target,"Tap again to leave"))return;
+    closeSheet();
+    try{await Cloud.leave();toast("You left the household.");}
+    catch(x){console.warn(x);toast("Couldn't leave the household. Try again.");}
+  });
+  document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=async e=>{
+    if(!armed(e.target,"Tap again"))return;
+    try{await Cloud.removeMember(b.dataset.remove);toast("Removed from the household.");}
+    catch(x){console.warn(x);toast("Couldn't remove them. Try again.");}
+  });
+  on("#mBackup",()=>download(`cabinet-count-backup-${stampDate()}.json`,JSON.stringify({app:"cabinet-count",version:1,items:state.items.map(withId)},null,2),"application/json"));
+  on("#mCsv",()=>download(`cabinet-count-${stampDate()}.csv`,csv(),"text/csv"));
+  on("#mRestore",()=>$("#restoreFile").click());
+  on("#mClear",async e=>{
+    if(!armed(e.target,`Tap again to delete all ${state.items.length} items`))return;
+    const old=state.items.map(withId);closeSheet();
+    await store.replaceAll([]);
+    toast("Deleted all items",()=>store.replaceAll(old));
+  });
+  on("#mClose",closeSheet);
+}
+$("#restoreFile").addEventListener("change",async e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  let items;
+  try{const j=JSON.parse(await f.text());items=Array.isArray(j)?j:j.items;if(!Array.isArray(items))throw 0;}
+  catch(_){return toast("That file isn't a Cabinet Count backup.");}
+  const clean=items.filter(i=>i&&i.name).map(withId);
+  const old=state.items.map(withId);closeSheet();
+  await store.replaceAll(clean);
+  toast(`Restored ${clean.length} items`,()=>store.replaceAll(old));
+});
+
+/* ===================== live scanner ===================== */
 let stream=null,zreader=null,loopTimer=null,lastCode="",lastAt=0,busy=false;
 async function openScanner(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
@@ -388,10 +857,11 @@ function onCode(raw){
   const now=Date.now();
   if(code===lastCode&&now-lastAt<2000)return; // same can still in view
   lastCode=code;lastAt=now;feedback();
-  const r=applyScan(code);
-  if(r){
+  const hit=findByCode(code);
+  if(hit){
+    const r=bump(hit.id,state.mode==="add"?1:-1);
     const h=$("#scanHit");h.hidden=false;
-    h.textContent=`${state.mode==="add"?"+1":"−1"} ${r.hit.name} · now ${r.next}`;
+    h.textContent=r.prev===r.next?`${hit.name} is already at 0`:`${state.mode==="add"?"+1":"−1"} ${hit.name} · now ${r.next}`;
     $("#scanMsg").textContent="Keep scanning, or tap Done";
     return;
   }
@@ -408,63 +878,29 @@ $("#torchBtn").onclick=async()=>{
 };
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&stream)closeScanner();});
 
-/* ---------- backup & settings ---------- */
-function download(name,text,type){
-  const url=URL.createObjectURL(new Blob([text],{type}));
-  const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),2000);
-}
-function stamp(){return new Date().toISOString().slice(0,10);}
-function csv(){
-  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
-  return["name,barcode,location,qty,low_at"].concat(state.items.map(i=>[q(i.name),q(i.barcode),q(i.location),i.qty,i.low??0].join(","))).join("\n");
-}
-$("#menuBtn").onclick=()=>{
-  openSheet(`<h2>Backup</h2>
-    <p class="note">Your items are stored only on this phone. Save a backup now and then, or before switching phones.</p>
-    <div class="menu">
-      <button class="btn plain" id="mBackup">Save backup file</button>
-      <button class="btn plain" id="mRestore">Restore from backup</button>
-      <button class="btn plain" id="mCsv">Export spreadsheet (CSV)</button>
-      <button class="btn danger" id="mClear">Delete all items</button>
-    </div>
-    <button class="btn plain" id="mClose">Close</button>`);
-  $("#mBackup").onclick=()=>{download(`cabinet-count-backup-${stamp()}.json`,JSON.stringify({app:"cabinet-count",version:1,items:state.items},null,2),"application/json");};
-  $("#mCsv").onclick=()=>download(`cabinet-count-${stamp()}.csv`,csv(),"text/csv");
-  $("#mRestore").onclick=()=>$("#restoreFile").click();
-  $("#mClear").onclick=e=>{
-    if(!e.target.dataset.armed){e.target.dataset.armed="1";e.target.textContent=`Tap again to delete all ${state.items.length} items`;return;}
-    const old=state.items;state.items=[];save();render();closeSheet();toast("Deleted all items",()=>{state.items=old;save();render();});
-  };
-  $("#mClose").onclick=closeSheet;
-};
-$("#restoreFile").addEventListener("change",async e=>{
-  const f=e.target.files[0];e.target.value="";if(!f)return;
-  try{
-    const j=JSON.parse(await f.text());const items=Array.isArray(j)?j:j.items;
-    if(!Array.isArray(items))throw 0;
-    const clean=items.filter(i=>i&&i.name).map(i=>({id:i.id||newId(),name:String(i.name),barcode:normCode(i.barcode||""),location:LOCS.includes(i.location)?i.location:"Other",qty:Math.max(0,parseInt(i.qty)||0),low:Math.max(0,parseInt(i.low)||0),updatedAt:i.updatedAt||Date.now()}));
-    const old=state.items;state.items=clean;save();render();closeSheet();
-    toast(`Restored ${clean.length} items`,()=>{state.items=old;save();render();});
-  }catch(_){toast("That file isn't a Cabinet Count backup.");}
-});
-
-/* ---------- list events ---------- */
+/* ===================== list events ===================== */
 $("#q").addEventListener("input",e=>{state.q=e.target.value;render();});
 $("#chips").addEventListener("click",e=>{const b=e.target.closest("[data-f]");if(b){state.filter=b.dataset.f;render();}});
 $("#listHost").addEventListener("click",e=>{
   const t=e.target.closest("button");if(!t)return;
-  const get=id=>state.items.find(i=>i.id===id);
-  if(t.dataset.inc){const i=get(t.dataset.inc);setQty(i.id,i.qty+1);}
-  else if(t.dataset.dec){const i=get(t.dataset.dec);setQty(i.id,i.qty-1);}
-  else if(t.dataset.edit)itemForm({title:"Edit item",item:get(t.dataset.edit)});
+  if(t.dataset.inc)bump(t.dataset.inc,1);
+  else if(t.dataset.dec)bump(t.dataset.dec,-1);
+  else if(t.dataset.edit)itemForm({title:"Edit item",item:state.items.find(i=>i.id===t.dataset.edit)});
 });
 function setMode(m){state.mode=m;$("#modeAdd").setAttribute("aria-pressed",m==="add");$("#modeUse").setAttribute("aria-pressed",m==="use");}
 $("#modeAdd").onclick=()=>setMode("add");$("#modeUse").onclick=()=>setMode("use");
 $("#manualBtn").onclick=()=>itemForm({title:"Add an item",item:{qty:1},note:{text:"Type the digits under the barcode and tap Look up, or leave it blank for things without one."}});
+$("#menuBtn").onclick=openMenu;
 
-/* ---------- boot ---------- */
-load();render();
+/* ===================== boot ===================== */
+Local.load();
+if(lsGet(CLOUD_FLAG)){
+  // Signed in before: go straight to the shared list (works offline from the phone's saved copy).
+  state.loading=true;render();
+  ensureCloud().then(ok=>{if(!ok)switchStore(Local);});
+}else{
+  Local.start();
+}
 if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body>

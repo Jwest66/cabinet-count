@@ -1,11 +1,12 @@
 // Cabinet Count service worker: keeps the app working offline.
 // Bump VERSION whenever you change any app file so phones pick up the update.
-const VERSION = "cabinet-count-v1";
+const VERSION = "cabinet-count-v2";
 const SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./vendor/zxing.min.js",
+  "./vendor/firebase.js",
   "./icon-192.png",
   "./icon-512.png",
   "./apple-touch-icon.png"
@@ -24,13 +25,26 @@ self.addEventListener("activate", e => {
 });
 
 self.addEventListener("fetch", e => {
-  const url = new URL(e.request.url);
-  // Product lookups and fonts go to the network; only the app's own files are cached.
-  if (url.origin !== self.location.origin || e.request.method !== "GET") return;
+  const req = e.request, url = new URL(req.url);
+  // Firebase, product lookups and fonts go straight to the network; only the app's own files are cached.
+  if (url.origin !== self.location.origin || req.method !== "GET") return;
+
+  // The page itself: try the network first so updates show up right away, fall back to the saved copy offline.
+  if (req.mode === "navigate") {
+    e.respondWith(
+      fetch(req).then(res => {
+        if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put("./index.html", copy)); }
+        return res;
+      }).catch(() => caches.match("./index.html"))
+    );
+    return;
+  }
+
+  // Everything else (scripts, icons): saved copy first, then network.
   e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-      if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
+    caches.match(req).then(hit => hit || fetch(req).then(res => {
+      if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); }
       return res;
-    }).catch(() => caches.match("./index.html")))
+    }))
   );
 });

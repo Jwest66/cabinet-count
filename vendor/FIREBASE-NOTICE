@@ -1,0 +1,3 @@
+vendor/firebase.js is a bundle of the Firebase JavaScript SDK v13.0.0 (firebase/app, firebase/auth, firebase/firestore).
+Copyright Google LLC. Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0
+Source: https://github.com/firebase/firebase-js-sdk

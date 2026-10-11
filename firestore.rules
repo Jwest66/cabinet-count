@@ -1,0 +1,106 @@
+rules_version = '2';
+
+// Cabinet Count security rules.
+// Paste this whole file into Firebase console → Firestore Database → Rules, then Publish.
+//
+// Data layout
+//   users/{uid}                          which household this person belongs to
+//   households/{hid}                     name, owner, current invite code
+//   households/{hid}/members/{uid}       who is in the household
+//   households/{hid}/items/{itemId}      the inventory
+//   invites/{code}                       maps an 8-character invite code to a household
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function householdPath(hid) {
+      return /databases/$(database)/documents/households/$(hid);
+    }
+    function memberPath(hid) {
+      return /databases/$(database)/documents/households/$(hid)/members/$(request.auth.uid);
+    }
+    // Reads: are you a member right now?
+    function isMember(hid) {
+      return signedIn() && exists(memberPath(hid));
+    }
+    // Writes: will you be a member once this write (or batch) is applied?
+    // This lets "create household + add me + add my items" go through as one batch.
+    function isMemberAfter(hid) {
+      return signedIn() && existsAfter(memberPath(hid));
+    }
+    function validItem(d) {
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 200
+        && d.barcode is string && d.barcode.size() <= 64
+        && d.location is string && d.location.size() <= 30
+        && d.qty is int && d.qty >= 0 && d.qty <= 100000
+        && d.low is int && d.low >= 0 && d.low <= 100000;
+    }
+    function validHousehold(d) {
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 60
+        && d.owner is string;
+    }
+
+    // Each person can only see and change their own pointer.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /households/{hid} {
+      allow read: if isMember(hid);
+      allow create: if signedIn()
+        && request.resource.data.owner == request.auth.uid
+        && validHousehold(request.resource.data);
+      allow update: if isMember(hid)
+        && request.resource.data.owner == resource.data.owner
+        && validHousehold(request.resource.data);
+      allow delete: if signedIn() && resource.data.owner == request.auth.uid;
+
+      match /members/{uid} {
+        allow read: if isMember(hid);
+
+        // You can only add yourself, and only as the household's owner
+        // or by presenting a current invite code for this household.
+        allow create: if signedIn() && request.auth.uid == uid && (
+          (request.resource.data.role == 'owner'
+            && existsAfter(householdPath(hid))
+            && getAfter(householdPath(hid)).data.owner == request.auth.uid)
+          ||
+          (request.resource.data.role == 'member'
+            && request.resource.data.code is string
+            && request.resource.data.code.size() == 8
+            && exists(/databases/$(database)/documents/invites/$(request.resource.data.code))
+            && get(/databases/$(database)/documents/invites/$(request.resource.data.code)).data.householdId == hid)
+        );
+
+        allow update: if false;
+
+        // Leave yourself, or the owner removes someone.
+        allow delete: if signedIn() && (
+          request.auth.uid == uid
+          || (exists(householdPath(hid)) && get(householdPath(hid)).data.owner == request.auth.uid)
+        );
+      }
+
+      match /items/{itemId} {
+        allow read: if isMember(hid);
+        allow create, update: if isMemberAfter(hid) && validItem(request.resource.data);
+        allow delete: if isMemberAfter(hid);
+      }
+    }
+
+    // Anyone signed in can look up one code (that's how joining works),
+    // but nobody can list codes, and only members can make or retire them.
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if code.size() == 8
+        && request.resource.data.householdId is string
+        && isMemberAfter(request.resource.data.householdId);
+      allow update: if false;
+      allow delete: if signedIn() && isMember(resource.data.householdId);
+    }
+  }
+}
