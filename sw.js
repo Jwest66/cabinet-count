@@ -1,6 +1,6 @@
 // Cabinet Count service worker: keeps the app working offline.
 // Bump VERSION whenever you change any app file so phones pick up the update.
-const VERSION = "cabinet-count-v2";
+const VERSION = "cabinet-count-v3";
 const SHELL = [
   "./",
   "./index.html",
@@ -9,7 +9,8 @@ const SHELL = [
   "./vendor/firebase.js",
   "./icon-192.png",
   "./icon-512.png",
-  "./apple-touch-icon.png"
+  "./apple-touch-icon.png",
+  "./icon.svg"
 ];
 
 self.addEventListener("install", e => {
