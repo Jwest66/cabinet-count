@@ -240,10 +240,12 @@ function cleanItem(d){
   const img=safeImg(d.img),photo=safePhoto(d.photo);
   if(img)o.img=img;
   if(photo)o.photo=photo;
-  if(d.imgChecked||img||photo)o.imgChecked=true; // a picture was found, taken, or looked for already
+  if(d.imgOff&&!img&&!photo)o.imgOff=true; // picture removed on purpose: never look again
+  const t=parseInt(d.imgTry);if(t>0)o.imgTry=Math.min(t,99); // which round of picture sources was already tried
   return o;
 }
 /* ---------- item pictures ---------- */
+const IMG_TRY=2; // raise this when a new picture source is added, so missing pictures get looked up again
 const TILE=[["#8EA8FF","#0D1222"],["#C8F23C","#172000"],["#FF9180","#3B1610"],["#4ADE80","#06240F"],["#F5C451","#2B1D00"],["#C9A8FF","#1E0D3A"]];
 function tileColors(name){let h=0;for(const ch of String(name||""))h=(h*31+ch.charCodeAt(0))>>>0;return TILE[h%TILE.length];}
 function thumbHTML(i,big){
@@ -270,13 +272,13 @@ const backfilled=new Set();
 async function backfillPictures(){
   if(backfilled.has(store)||!navigator.onLine)return;
   const s=store;backfilled.add(s);
-  const todo=state.items.filter(i=>i.barcode&&!i.img&&!i.photo&&!i.imgChecked).slice(0,30);
+  const todo=state.items.filter(i=>i.barcode&&!i.img&&!i.photo&&!i.imgOff&&(i.imgTry||0)<IMG_TRY).slice(0,30);
   for(const it of todo){
     if(store!==s)return;
     const r=await lookup(it.barcode);
     const cur=state.items.find(x=>x.id===it.id);
     if(store!==s||!cur||cur.img||cur.photo)continue;
-    s.patch(it.id,r&&r.image?{img:r.image,imgChecked:true}:{imgChecked:true});
+    s.patch(it.id,r&&r.image?{img:r.image,imgTry:IMG_TRY}:{imgTry:IMG_TRY});
     await new Promise(z=>setTimeout(z,800));
   }
 }
@@ -292,21 +294,45 @@ async function getJSON(url,ms=6000){
   try{const r=await fetch(url,{signal:ctl.signal});if(!r.ok)return null;return await r.json();}
   catch(e){return null;}finally{clearTimeout(t);}
 }
+// UPC-E is the short 8-digit barcode on small packages (soda cans, gum). Databases file it under the full UPC-A.
+function upcEtoA(e){
+  if(!/^[01]\d{7}$/.test(e))return"";
+  const ns=e[0],x=e.slice(1,7),c=e[7],l=x[5];let m;
+  if(l<="2")m=x[0]+x[1]+l+"0000"+x[2]+x[3]+x[4];
+  else if(l==="3")m=x[0]+x[1]+x[2]+"00000"+x[3]+x[4];
+  else if(l==="4")m=x[0]+x[1]+x[2]+x[3]+"00000"+x[4];
+  else m=x[0]+x[1]+x[2]+x[3]+x[4]+"0000"+l;
+  const a=ns+m+c;return checkOk(a)?a:"";
+}
+// Prefer the English front photo, but take a front photo in any language over none.
+function offImage(p){
+  const sel=p.selected_images&&p.selected_images.front;
+  const any=o=>o?Object.values(o).find(Boolean):"";
+  return safeImg(p.image_front_small_url||any(sel&&sel.small)||any(sel&&sel.display)||p.image_front_url||p.image_small_url||p.image_url);
+}
 async function lookup(code){
   if(!/^\d{8,14}$/.test(code)||!navigator.onLine)return null;
-  for(const c of code.length===12?["0"+code,code]:[code]){
-    const j=await getJSON(`https://world.openfoodfacts.org/api/v2/product/${c}.json?fields=product_name,brands,quantity,image_front_small_url,image_small_url,image_front_thumb_url`);
+  const upcA=code.length===8?upcEtoA(code):"";
+  const tries=[];for(const c of [code,upcA])if(c){if(c.length===12)tries.push("0"+c);tries.push(c);}
+  let found=null;
+  for(const c of tries){
+    const j=await getJSON(`https://world.openfoodfacts.org/api/v2/product/${c}.json?fields=product_name,brands,quantity,image_front_small_url,image_front_url,image_small_url,image_url,selected_images`);
     const p=j&&j.status===1&&j.product;
-    if(p&&p.product_name){
-      const brand=(p.brands||"").split(",")[0].trim();
-      const name=[brand&&!p.product_name.toLowerCase().includes(brand.toLowerCase())?brand:"",p.product_name,p.quantity].filter(Boolean).join(" ");
-      return{name:name.trim(),source:"Open Food Facts",image:safeImg(p.image_front_small_url||p.image_small_url||p.image_front_thumb_url)};
-    }
+    if(!p)continue;
+    const brand=(p.brands||"").split(",")[0].trim(),pn=(p.product_name||"").trim();
+    const name=pn?[brand&&!pn.toLowerCase().includes(brand.toLowerCase())?brand:"",pn,p.quantity].filter(Boolean).join(" ").trim():"";
+    const image=offImage(p);
+    if(name||image){found={name,source:"Open Food Facts",image};break;}
   }
-  const u=await getJSON(`https://api.upcitemdb.com/prod/trial/lookup?upc=${code}`);
+  if(found&&found.name&&found.image)return found;
+  const u=await getJSON(`https://api.upcitemdb.com/prod/trial/lookup?upc=${upcA||code}`);
   const it=u&&u.items&&u.items[0];
-  if(it&&it.title)return{name:it.title.trim(),source:"UPCitemdb",image:safeImg((it.images||[]).find(x=>/^https:/.test(x)))};
-  return null;
+  if(it&&it.title){
+    const image=safeImg((it.images||[]).find(x=>/^https:/.test(x)));
+    if(!found)return{name:it.title.trim(),source:"UPCitemdb",image};
+    return{name:found.name||it.title.trim(),source:found.source,image:found.image||image};
+  }
+  return found;
 }
 
 /* ===================== store: this phone only ===================== */
@@ -563,7 +589,7 @@ function armed(btn,label){if(btn.dataset.armed)return true;btn.dataset.armed="1"
 /* ===================== add / edit item ===================== */
 function itemForm({title,item,note,lookupCode}){
   const it=item||{};
-  let fImg=safeImg(it.img),fPhoto=safePhoto(it.photo),picRemoved=false;
+  let fImg=safeImg(it.img),fPhoto=safePhoto(it.photo),picRemoved=false,looked=false;
   const changed=store===Cloud&&it.updatedByName&&it.updatedAt?`<p class="note">Last changed by ${esc(it.updatedBy===Cloud.user?.uid?"you":it.updatedByName)}, ${timeAgo(it.updatedAt)}</p>`:"";
   openSheet(`
     <h2>${esc(title)}</h2>
@@ -602,10 +628,10 @@ function itemForm({title,item,note,lookupCode}){
   const doLookup=async()=>{
     const c=normCode($("#fCode").value),b=$("#lookBtn"),f=$("#foundNote");
     b.disabled=true;b.textContent="Looking it up…";
-    const r=await lookup(c);
+    const r=await lookup(c);looked=navigator.onLine;
     if(!$("#lookBtn"))return;
     b.disabled=false;b.textContent="Look up this barcode";
-    if(r){if(!$("#fName").value.trim()||$("#fName").dataset.auto){$("#fName").value=r.name;$("#fName").dataset.auto="1";}
+    if(r){if(r.name&&(!$("#fName").value.trim()||$("#fName").dataset.auto)){$("#fName").value=r.name;$("#fName").dataset.auto="1";}
       if(r.image&&!fPhoto&&!picRemoved)fImg=r.image;drawPic();
       f.textContent=`Found on ${r.source}. Edit the name if you like.`;f.className="found";}
     else{f.textContent=navigator.onLine?"Not found in the product databases. Type a name.":"You're offline, so the lookup didn't run. Type a name.";f.className="note";}
@@ -625,7 +651,8 @@ function itemForm({title,item,note,lookupCode}){
     const dupe=code&&findByCode(code);
     if(dupe&&dupe.id!==it.id){err.textContent=`That barcode already belongs to ${dupe.name}.`;err.hidden=false;return;}
     const data={name,barcode:code,location:$("#fLoc").value,qty:$("#fQty").value,low:$("#fLow").value,
-      img:fImg,photo:fPhoto,imgChecked:picRemoved||!!(fImg||fPhoto)||(!!it.imgChecked&&code===it.barcode)};
+      img:fImg,photo:fPhoto,imgOff:picRemoved||(!!it.imgOff&&code===it.barcode),
+      imgTry:looked?IMG_TRY:(code===it.barcode?it.imgTry:0)};
     if(it.id)store.update(it.id,data);else store.add(data);
     closeSheet();
     toast(it.id?`Saved ${name}`:`Added ${name} · ${Math.max(0,parseInt(data.qty)||0)} on the shelf`);
