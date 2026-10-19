@@ -70,6 +70,10 @@ The app uses the Firebase project `pantrycontents`. In console.firebase.google.c
 
 The Firebase settings in `index.html` aren't secret: they only identify the project. The rules are what keep each household's list private to its members.
 
+## Kroger pictures (optional)
+
+`kroger-relay/worker.js` is a tiny Cloudflare Worker that looks up product photos in Kroger's catalog. It holds the Kroger API keys, which must never go in `index.html` because this repo is public. Deploy it on Cloudflare, add `KROGER_CLIENT_ID` and `KROGER_CLIENT_SECRET` under the Worker's Settings → Variables and Secrets, then put the Worker's address in `KROGER_RELAY` near the top of `index.html`.
+
 ## Your data
 
 Signed out, items are stored only in this browser on this phone. Deleting the app, or clearing Safari/Chrome website data, deletes them. Signed in, the household's list is stored in Firebase, with a working copy on each phone.

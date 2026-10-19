@@ -194,6 +194,8 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "424251350515",
   appId: "1:424251350515:web:6e8450f2a08806353b4686"
 };
+// Picture relay for Kroger's product catalog (see kroger-relay/worker.js). Empty = not set up yet.
+const KROGER_RELAY="";
 const LOCS=["Cabinet","Pantry","Fridge","Freezer","Bathroom","Other"];
 const LOCAL_KEY="cabinet-count:v1";
 const BACKUP_KEY="cabinet-count:v1:before-sharing";
@@ -245,7 +247,7 @@ function cleanItem(d){
   return o;
 }
 /* ---------- item pictures ---------- */
-const IMG_TRY=2; // raise this when a new picture source is added, so missing pictures get looked up again
+const IMG_TRY=KROGER_RELAY?3:2; // raise this when a new picture source is added, so missing pictures get looked up again
 const TILE=[["#8EA8FF","#0D1222"],["#C8F23C","#172000"],["#FF9180","#3B1610"],["#4ADE80","#06240F"],["#F5C451","#2B1D00"],["#C9A8FF","#1E0D3A"]];
 function tileColors(name){let h=0;for(const ch of String(name||""))h=(h*31+ch.charCodeAt(0))>>>0;return TILE[h%TILE.length];}
 function thumbHTML(i,big){
@@ -325,6 +327,12 @@ async function lookup(code){
     if(name||image){found={name,source:"Open Food Facts",image};break;}
   }
   if(found&&found.name&&found.image)return found;
+  if(KROGER_RELAY){
+    const k=await getJSON(`${KROGER_RELAY}?upc=${upcA||code}`,8000);
+    const kImg=k&&safeImg(k.image),kName=k&&typeof k.name==="string"?k.name.trim().slice(0,200):"";
+    if(kImg||kName)found=found?{...found,name:found.name||kName,image:found.image||kImg}:{name:kName,source:"Kroger",image:kImg};
+    if(found&&found.name&&found.image)return found;
+  }
   const u=await getJSON(`https://api.upcitemdb.com/prod/trial/lookup?upc=${upcA||code}`);
   const it=u&&u.items&&u.items[0];
   if(it&&it.title){
