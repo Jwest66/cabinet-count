@@ -133,7 +133,7 @@ export default {
     }
     if (debug) { body.trace = trace; body.kroger = base; }
 
-    const res = Response.json(body, { headers: { ...cors, "Cache-Control": "public, max-age=86400" } });
+    const res = Response.json(body, { headers: { ...cors, "Cache-Control": body.error || debug ? "no-store" : "public, max-age=86400" } });
     if (!body.error && !debug) ctx.waitUntil(caches.default.put(cacheKey, res.clone()));
     return res;
   }
