@@ -11,26 +11,39 @@
 // Add &debug=1 to see what Kroger sent back if a lookup isn't working.
 
 const ALLOWED_ORIGINS = ["https://jwest66.github.io", "http://localhost:8765"];
-const KROGER = "https://api.kroger.com/v1";
+// Kroger's live API, then its test ("Certification") environment, where new apps often start.
+const KROGER_BASES = ["https://api.kroger.com/v1", "https://api-ce.kroger.com/v1"];
 
+let base = null;
 let token = null;
 let tokenExpires = 0;
 
 async function getToken(env) {
   if (token && Date.now() < tokenExpires - 60000) return token;
-  const res = await fetch(KROGER + "/connect/oauth2/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: "Basic " + btoa(env.KROGER_CLIENT_ID + ":" + env.KROGER_CLIENT_SECRET)
-    },
-    body: "grant_type=client_credentials&scope=product.compact"
-  });
-  if (!res.ok) throw new Error("Kroger sign-in failed (" + res.status + "): check the client ID and secret");
-  const j = await res.json();
-  token = j.access_token;
-  tokenExpires = Date.now() + (j.expires_in || 1800) * 1000;
-  return token;
+  const id = String(env.KROGER_CLIENT_ID || "").trim();
+  const secret = String(env.KROGER_CLIENT_SECRET || "").trim();
+  if (!id) throw new Error("KROGER_CLIENT_ID isn't set on this Worker (Settings → Variables and Secrets), or it wasn't deployed");
+  if (!secret) throw new Error("KROGER_CLIENT_SECRET isn't set on this Worker (Settings → Variables and Secrets), or it wasn't deployed");
+  const tried = [];
+  for (const b of base ? [base] : KROGER_BASES) {
+    const res = await fetch(b + "/connect/oauth2/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: "Basic " + btoa(id + ":" + secret)
+      },
+      body: "grant_type=client_credentials&scope=product.compact"
+    });
+    if (res.ok) {
+      const j = await res.json();
+      base = b;
+      token = j.access_token;
+      tokenExpires = Date.now() + (j.expires_in || 1800) * 1000;
+      return token;
+    }
+    tried.push(new URL(b).host + " said " + res.status);
+  }
+  throw new Error("Kroger sign-in failed (" + tried.join(", ") + "). Check the client ID and secret. Client ID used: " + id.slice(0, 6) + "…, secret length " + secret.length);
 }
 
 // Kroger product IDs are the UPC without its check digit, padded to 13 digits.
@@ -59,7 +72,7 @@ function cleanName(p) {
 }
 
 async function krogerGet(path, t) {
-  const r = await fetch(KROGER + path, { headers: { Authorization: "Bearer " + t, Accept: "application/json" } });
+  const r = await fetch(base + path, { headers: { Authorization: "Bearer " + t, Accept: "application/json" } });
   const text = await r.text();
   let json = null;
   try { json = JSON.parse(text); } catch (e) {}
@@ -118,7 +131,7 @@ export default {
     } catch (e) {
       body = { error: String((e && e.message) || e) };
     }
-    if (debug) body.trace = trace;
+    if (debug) { body.trace = trace; body.kroger = base; }
 
     const res = Response.json(body, { headers: { ...cors, "Cache-Control": "public, max-age=86400" } });
     if (!body.error && !debug) ctx.waitUntil(caches.default.put(cacheKey, res.clone()));
