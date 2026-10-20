@@ -50,6 +50,10 @@ Open it from the new icon. The first time you tap **Scan barcode**, allow camera
 
 The app checks **Open Food Facts** first (free and open, strong on groceries), then **UPCitemdb**'s free trial tier (broader, with a daily lookup limit). If neither knows the barcode, you type the name once. Lookups need an internet connection; everything else works offline.
 
+## Use-soon reminders
+
+Every unit you add is dated, and using one takes the oldest first. Each item gets a food type (from the product database or its name) with a shelf life from USDA FoodKeeper guidance, using the low end of each range. Items get a **Use by** tag, the **Use soon** filter and a banner 2 weeks before their estimated date, or sooner for foods that only keep a few days or weeks. Tap an item to change its food type, set how long it keeps, or enter the date printed on the oldest package. Household goods get no reminders.
+
 ## Household sharing
 
 Signed out, the list lives only on that phone. Signed in, everyone in the household shares one list that syncs live, and it keeps working offline: changes save on the phone and sync when it's back online.

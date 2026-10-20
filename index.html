@@ -21,7 +21,7 @@
   --bg:#12141A; --surface:#1C2029; --ink:#ECEFF6; --muted:#9AA3B5; --line:#2C3240;
   --accent:#8EA8FF; --accent-ink:#0D1222; --label:#C8F23C; --label-ink:#172000;
   --warn:#FF9180; --warn-bg:#3B2220; --soft:#262B37; --ok:#4ADE80; --pending:#F5C451;
-  --toast-action:#3347C4;
+  --toast-action:#3347C4; --soon-bg:#3A2F12; --soon-line:#5A4A1C;
   --f-display:"Familjen Grotesk",ui-sans-serif,system-ui,-apple-system,sans-serif;
   --f-body:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
@@ -72,6 +72,13 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .stepper button{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:600 1.1rem var(--f-body);cursor:pointer}
 .qty{min-width:2.4ch;text-align:center;font:600 1.15rem var(--f-display);font-variant-numeric:tabular-nums}
 .qty.zero{color:var(--warn)}
+.tag.soon{background:var(--soon-bg);color:var(--pending);text-transform:none;letter-spacing:.02em}
+.tag.past{text-transform:none;letter-spacing:.02em}
+.stat.soon{background:var(--soon-bg);color:var(--pending)} .stat.soon b{color:var(--pending)}
+.banner{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--soon-bg);border:1px solid var(--soon-line);border-radius:12px;padding:10px 12px;font-size:.9rem}
+.banner .btns{gap:6px}
+.lots{display:flex;flex-direction:column;gap:2px;font-size:.84rem;color:var(--muted);margin:0;padding:0;list-style:none;font-variant-numeric:tabular-nums}
+.keep-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
 .empty{text-align:center;padding:36px 20px;color:var(--muted)}
 .empty h2{font:600 1.15rem var(--f-display);color:var(--ink);margin:0 0 6px}
 
@@ -146,6 +153,7 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
   </header>
   <input id="q" type="search" placeholder="Search items or barcodes" aria-label="Search items">
   <div class="chips" id="chips" role="group" aria-label="Filter by location"></div>
+  <div id="soonBanner" class="banner" role="status" hidden></div>
   <div id="listHost"></div>
 </div>
 
@@ -244,7 +252,144 @@ function cleanItem(d){
   if(photo)o.photo=photo;
   if(d.imgOff&&!img&&!photo)o.imgOff=true; // picture removed on purpose: never look again
   const t=parseInt(d.imgTry);if(t>0)o.imgTry=Math.min(t,99); // which round of picture sources was already tried
+  if(Array.isArray(d.lots))o.lots=d.lots.filter(l=>l&&l.at>0&&l.n>0).slice(-60).map(l=>({at:Math.floor(l.at),n:Math.min(9999,Math.floor(l.n))}));
+  const at=parseInt(d.addedAt);if(at>0)o.addedAt=at;
+  if(d.cat&&(d.cat in FOOD_BY_ID))o.cat=d.cat;
+  if(d.catSet&&o.cat)o.catSet=true; // you picked the food type yourself
+  const k=parseInt(d.keep);if(k>0)o.keep=Math.min(k,3650);
+  const ub=parseInt(d.useBy),ua=parseInt(d.useByAt);if(ub>0&&ua>0){o.useBy=ub;o.useByAt=ua;}
   return o;
+}
+/* ---------- freshness ---------- */
+// Shelf lives in days, from USDA FoodKeeper / FSIS guidance, using the LOW end of each range
+// so reminders come early rather than late. p = pantry or cabinet, f = fridge, z = freezer.
+// Order matters: the first match wins, so specific foods come before general ones.
+const FOODS=[
+  {id:"none",label:"Not food (no reminders)",re:/\b(paper towels?|toilet paper|tissues?|napkins?|soap|detergent|shampoo|conditioner|toothpaste|mouthwash|deodorant|lotion|razors?|trash bags?|garbage bags?|aluminum foil|foil|plastic wrap|zip ?lock|ziploc|batteries|cleaner|bleach|sponges?|dish ?washer|laundry|dryer sheets|wipes|light ?bulbs?|vitamins?)\b/},
+  {id:"soda",label:"Soda and sparkling drinks",p:180,f:180,re:/\b(soda|cola|coke|pepsi|sprite|ginger ale|seltzer|sparkling|la ?croix|dr\.? pepper|mountain dew|root beer|tonic water|soft drinks?|carbonated)\b/},
+  {id:"water",label:"Bottled water",p:365,f:365,re:/\b(bottled water|spring water|purified water|waters)\b/},
+  {id:"beer",label:"Beer",p:120,f:120,re:/\b(beer|lager|ale|ipa|stout|beers)\b/},
+  {id:"juice",label:"Juice",p:365,f:7,re:/\b(juices?|lemonade|nectar)\b/},
+  {id:"plantmilk",label:"Plant milk",p:180,f:7,re:/\b(almond|oat|soy|coconut|rice) (milk|beverage)\b/},
+  {id:"frozenproduce",label:"Frozen vegetables or fruit",z:240,re:/\bfrozen\b[a-z ,]*\b(vegetables?|veggies|peas|corn|broccoli|spinach|green beans|berries|strawberries|blueberries|fruit|mango)\b|\bfrozen (vegetables|fruits?)\b/},
+  {id:"icecream",label:"Ice cream and frozen desserts",z:60,re:/\b(ice cream|gelato|sorbet|popsicles?|frozen yogh?urt)\b/},
+  {id:"cannedacid",label:"Canned tomatoes, fruit and pickles",p:365,f:365,re:/\b(crushed|diced|stewed|whole peeled|canned) tomatoes\b|\btomato (sauce|paste|puree)\b|\b(pasta|marinara|spaghetti|pizza) sauce\b|\bsalsa\b|\b(peaches|pears|pineapple|mandarin oranges|fruit cocktail|applesauce|cranberry sauce|pickles?|sauerkraut|olives)\b/},
+  {id:"frozenmeals",label:"Frozen meals and pizza",z:90,re:/\b(frozen|tv dinner|pizza|pot pies?|burritos?|waffles|nuggets|fish sticks|lasagna)\b/},
+  {id:"cereal",label:"Cereal",p:180,re:/\b(cereals?|granola|cheerios|corn flakes|bran|frosted)\b/},
+  {id:"crackers",label:"Crackers and pretzels",p:90,re:/\b(crackers?|pretzels?|goldfish|saltines|graham)\b/},
+  {id:"chips",label:"Chips and popcorn",p:60,re:/\b(chips|crisps|popcorn|tortilla chips|doritos|cheetos|pringles)\b/},
+  {id:"cookies",label:"Cookies and snack cakes",p:60,re:/\b(cookies?|oreos?|snack cakes?|brownies|pastries)\b/},
+  {id:"bars",label:"Snack and granola bars",p:180,re:/\b(bars?)\b/},
+  {id:"spices",label:"Spices and seasonings",p:730,re:/\b(spices?|seasonings?|cinnamon|paprika|cumin|oregano|chili powder|garlic powder|onion powder|black pepper|peppercorns?|bay leaves|thyme|nutmeg|salt|bouillon)\b/},
+  {id:"tortillas",label:"Tortillas and wraps",p:7,f:28,z:180,re:/\b(tortillas?|wraps)\b/},
+  {id:"driedbeans",label:"Dried beans and lentils",p:365,re:/\b(dry|dried)\b[a-z ]*\b(beans|lentils|peas|chickpeas)\b|\blentils\b/},
+  {id:"canned",label:"Canned beans, vegetables, soup, meat or fish",p:730,f:730,re:/\b(canned|cans?|soups?|chili|broth|stock|beans|chickpeas|garbanzos?|corn|peas|green beans|tuna|sardines|spam|vienna sausages|evaporated milk|condensed milk|refried)\b/},
+  {id:"nutbutter",label:"Peanut and nut butter",p:180,re:/\b(peanut|almond|cashew|nut|sunflower) butter\b|\bnutella\b/},
+  {id:"pasta",label:"Dry pasta and noodles",p:365,re:/\b(pasta|spaghetti|macaroni|penne|noodles|linguine|fettuccine|rotini|rigatoni|lasagna noodles|ramen|orzo|couscous|mac (and|&) cheese)\b/},
+  {id:"milk",label:"Milk and cream",f:7,z:90,re:/\b(milk|half and half|half-and-half|heavy cream|whipping cream|buttermilk|dairy milks?|milks)\b(?! ?chocolate)/},
+  {id:"yogurt",label:"Yogurt",f:7,z:30,re:/\b(yogh?urts?|kefir)\b/},
+  {id:"eggs",label:"Eggs",f:21,re:/\beggs?\b/},
+  {id:"butter",label:"Butter and margarine",f:30,z:180,re:/\b(butter|margarine)\b(?! ?(beans?|milk|cookies?|crackers?))/},
+  {id:"creamcheese",label:"Cream cheese",f:14,re:/\bcream cheese\b/},
+  {id:"softdairy",label:"Sour cream, cottage cheese, ricotta",f:7,re:/\b(sour cream|cottage cheese|ricotta|dips?)\b/},
+  {id:"softcheese",label:"Soft or fresh cheese",f:7,re:/\b(mozzarella|brie|feta|goat cheese|string cheese|burrata|queso fresco|camembert)\b/},
+  {id:"shredcheese",label:"Shredded or sliced cheese",f:30,z:90,re:/\b(shredded|sliced|grated) [a-z ]*cheese\b|\bcheese slices\b/},
+  {id:"hardcheese",label:"Hard cheese",f:180,z:180,re:/\b(cheddar|parmesan|parmigiano|swiss|gouda|colby|monterey jack|pepper jack|provolone|gruyere|cheeses?)\b/},
+  {id:"hotdogs",label:"Hot dogs",f:14,z:30,re:/\b(hot ?dogs?|franks|frankfurters|wieners?)\b/},
+  {id:"deli",label:"Lunch meat",f:14,z:30,re:/\b(lunch ?meat|deli|sliced (ham|turkey|chicken)|bologna|salami|pepperoni|prosciutto)\b/},
+  {id:"bacon",label:"Bacon and sausage",f:7,z:30,re:/\b(bacon|sausages?|bratwurst|brats|chorizo)\b/},
+  {id:"leftovers",label:"Leftovers",f:3,z:60,re:/\bleftovers?\b/},
+  {id:"chicken",label:"Raw chicken or turkey",f:1,z:270,re:/\b(chicken|turkey) (breasts?|thighs?|wings?|drumsticks?|legs?|tenders?|whole)\b|\bwhole (chicken|turkey)\b|\braw chicken\b/},
+  {id:"groundmeat",label:"Ground meat",f:1,z:90,re:/\bground (beef|turkey|pork|chicken|meat|chuck|sirloin)\b|\bhamburger meat\b/},
+  {id:"meat",label:"Steaks, chops and roasts",f:3,z:120,re:/\b(steaks?|pork chops?|chops|roast|ribs|tenderloin|brisket|lamb|veal|pork loin)\b/},
+  {id:"fish",label:"Fresh fish and seafood",f:1,z:90,re:/\b(fillets?|shrimp|tilapia|cod|scallops?|crab legs|fresh salmon|salmon fillet|seafood)\b/},
+  {id:"wwflour",label:"Whole wheat flour",p:30,f:180,re:/\bwhole wheat flour\b/},
+  {id:"flour",label:"Flour, cornmeal and baking mixes",p:180,re:/\b(flour|cornmeal|cake mix|brownie mix|pancake mix|muffin mix|biscuit mix|bisquick|baking powder|baking soda|yeast|cornstarch)\b/},
+  {id:"bread",label:"Bread, buns and bagels",p:4,f:7,z:90,re:/\b(bread|buns?|bagels?|rolls|english muffins?|baguette|brioche|pita|loaf)\b/},
+  {id:"berries",label:"Fresh berries",f:2,re:/\b(strawberries|blueberries|raspberries|blackberries|berries)\b/},
+  {id:"greens",label:"Lettuce and leafy greens",f:3,re:/\b(lettuce|salad mix|spring mix|spinach|kale|arugula|greens|romaine)\b/},
+  {id:"apples",label:"Apples",p:21,f:28,re:/\bapples?\b(?! ?(sauce|juice|cider))/},
+  {id:"citrus",label:"Oranges, lemons and limes",p:10,f:21,re:/\b(oranges?|lemons?|limes?|grapefruits?|clementines?|mandarins?)\b(?! ?(juice|soda))/},
+  {id:"bananas",label:"Bananas and avocados",p:3,f:5,re:/\b(bananas?|avocados?)\b/},
+  {id:"potatoes",label:"Potatoes and onions",p:30,re:/\b(potatoes|sweet potatoes|onions|garlic bulbs?|yams?)\b/},
+  {id:"freshveg",label:"Fresh vegetables",f:5,re:/\b(carrots?|celery|broccoli|cauliflower|bell peppers?|cucumbers?|zucchini|mushrooms?|asparagus|green onions|scallions|tomatoes|cabbage|squash|fresh herbs|cilantro|parsley)\b/},
+  {id:"brownrice",label:"Brown rice and whole grains",p:180,re:/\b(brown rice|quinoa|farro|barley|wild rice)\b/},
+  {id:"rice",label:"White rice",p:730,re:/\brice\b/},
+  {id:"sugar",label:"Sugar",p:730,re:/\bsugar\b/},
+  {id:"oats",label:"Oats and oatmeal",p:365,re:/\b(oats|oatmeal|rolled oats)\b/},
+  {id:"nuts",label:"Nuts, seeds and trail mix",p:120,f:120,z:365,re:/\b(nuts|almonds|peanuts|cashews|walnuts|pecans|pistachios|seeds|trail mix)\b/},
+  {id:"driedfruit",label:"Dried fruit",p:180,re:/\b(raisins|dried (fruit|cranberries|apricots|mango)|prunes|dates)\b/},
+  {id:"jam",label:"Jam, jelly, honey and syrup",p:365,re:/\b(jam|jelly|preserves|marmalade|honey|syrup|molasses)\b/},
+  {id:"mayo",label:"Mayonnaise",p:60,f:60,re:/\b(mayo|mayonnaise|aioli)\b/},
+  {id:"dressing",label:"Salad dressing",p:300,f:30,re:/\b(dressing|ranch|vinaigrette)\b/},
+  {id:"condiments",label:"Ketchup, mustard and sauces",p:365,f:180,re:/\b(ketchup|catsup|mustard|bbq sauce|barbecue sauce|hot sauce|soy sauce|teriyaki|worcestershire|vinegar|sriracha|steak sauce|relish|sauce)\b/},
+  {id:"oil",label:"Cooking oil",p:180,re:/\b(oil|cooking spray|shortening|crisco)\b/},
+  {id:"coffee",label:"Coffee",p:180,z:365,re:/\b(coffee|espresso|k-?cups?)\b/},
+  {id:"tea",label:"Tea",p:365,re:/\btea\b/},
+  {id:"candy",label:"Candy and chocolate",p:180,re:/\b(candy|chocolate|gummies|gummy|m&ms|skittles|mints|gum)\b/},
+  {id:"petfood",label:"Pet food",p:365,re:/\b(dog food|cat food|pet food|kibble|dog treats|cat treats)\b/}
+];
+const FOOD_BY_ID=Object.fromEntries(FOODS.map(f=>[f.id,f]));
+const DAY=864e5,SOON_DAYS=14;
+// How far ahead to warn: 2 weeks, or about a third of the shelf life for foods that don't last a month.
+function warnDays(days){return days>0?Math.min(SOON_DAYS,Math.max(1,Math.round(days*0.3))):SOON_DAYS;}
+const STORAGE={Cabinet:"p",Pantry:"p",Other:"p",Bathroom:"p",Fridge:"f",Freezer:"z"};
+const STORAGE_WORD={p:"pantry",f:"fridge",z:"freezer"};
+// Open Food Facts category tags ("en:canned-foods") read as plain words for matching.
+function tagWords(tags){return(Array.isArray(tags)?tags:[]).slice(0,30).map(t=>String(t).replace(/^[a-z]{2}:/,"").replace(/-/g," ")).join(" ; ");}
+function guessFood(text){const t=" "+String(text||"").toLowerCase().replace(/[®™]/g,"")+" ";for(const f of FOODS)if(f.re.test(t))return f.id;return"";}
+function foodOf(i){return i.cat&&FOOD_BY_ID[i.cat]?i.cat:guessFood(i.name);}
+// Days this item keeps where it's stored: your own number first, then the USDA estimate.
+function keepDays(i){
+  if(i.keep>0)return i.keep;
+  const f=FOOD_BY_ID[foodOf(i)];if(!f||f.id==="none")return 0;
+  const st=STORAGE[i.location]||"p";
+  return f[st]||f.p||f.f||f.z||0;
+}
+// Units on the shelf, grouped by the day they were added (oldest first). Using one takes the oldest.
+function normLots(i){
+  const qty=Math.max(0,i.qty||0);
+  let lots=(Array.isArray(i.lots)?i.lots:[]).filter(l=>l&&l.at>0&&l.n>0).map(l=>({at:Math.floor(l.at),n:Math.floor(l.n)})).sort((a,b)=>a.at-b.at);
+  let sum=lots.reduce((s,l)=>s+l.n,0);
+  while(sum>qty&&lots.length){const take=Math.min(lots[0].n,sum-qty);lots[0].n-=take;sum-=take;if(!lots[0].n)lots.shift();}
+  if(sum<qty){lots.push({at:i.addedAt||i.updatedAt||Date.now(),n:qty-sum});lots.sort((a,b)=>a.at-b.at);}
+  return lots;
+}
+const sameDay=(a,b)=>new Date(a).toDateString()===new Date(b).toDateString();
+function lotsAfter(i,delta){
+  const lots=normLots(i);
+  if(delta>0){const now=Date.now(),last=lots[lots.length-1];if(last&&sameDay(last.at,now))last.n+=delta;else lots.push({at:now,n:delta});}
+  else{let left=-delta;while(left>0&&lots.length){const take=Math.min(lots[0].n,left);lots[0].n-=take;left-=take;if(!lots[0].n)lots.shift();}}
+  return lots.slice(-60);
+}
+function lotsForQty(i,qty){const cur=normLots(i),sum=cur.reduce((s,l)=>s+l.n,0);return lotsAfter(i,qty-sum);}
+// When each group of units is due, and whether the item needs using soon.
+function freshness(i){
+  const days=keepDays(i),lots=normLots(i),now=Date.now();
+  const rows=lots.map(l=>({...l,due:i.useBy&&i.useByAt===l.at?i.useBy:days?l.at+days*DAY:0}));
+  const dues=rows.filter(r=>r.due).map(r=>r.due);
+  const next=dues.length?Math.min(...dues):0;
+  const warn=warnDays(days)*DAY;
+  const state=!next?"":next<=now?"past":next-now<=warn?"soon":"ok";
+  const soonUnits=rows.filter(r=>r.due&&r.due-now<=warn).reduce((s,r)=>s+r.n,0);
+  return{days,rows,next,state,soonUnits};
+}
+function fmtDate(t){const d=new Date(t),y=d.getFullYear()!==new Date().getFullYear();return d.toLocaleDateString(undefined,y?{month:"short",day:"numeric",year:"numeric"}:{month:"short",day:"numeric"});}
+function fmtKeep(days){
+  if(days>=365&&days%365===0)return days===365?"1 year":`${days/365} years`;
+  if(days>=60&&days%30===0)return`${days/30} months`;
+  if(days>=14&&days%7===0)return`${days/7} weeks`;
+  return days===1?"1 day":`${days} days`;
+}
+// Fill in dates for items saved before dates were tracked. Once per list per visit, no network.
+const lotsMigrated=new Set();
+function migrateLots(){
+  if(lotsMigrated.has(store))return;lotsMigrated.add(store);
+  for(const i of state.items){
+    if(Array.isArray(i.lots)||!(i.qty>0))continue;
+    const at=i.addedAt||i.updatedAt||Date.now();
+    store.patch(i.id,{lots:[{at,n:i.qty}],addedAt:at});
+  }
 }
 /* ---------- item pictures ---------- */
 const IMG_TRY=KROGER_RELAY?3:2; // raise this when a new picture source is added, so missing pictures get looked up again
@@ -318,13 +463,13 @@ async function lookup(code){
   const tries=[];for(const c of [code,upcA])if(c){if(c.length===12)tries.push("0"+c);tries.push(c);}
   let found=null;
   for(const c of tries){
-    const j=await getJSON(`https://world.openfoodfacts.org/api/v2/product/${c}.json?fields=product_name,brands,quantity,image_front_small_url,image_front_url,image_small_url,image_url,selected_images`);
+    const j=await getJSON(`https://world.openfoodfacts.org/api/v2/product/${c}.json?fields=product_name,brands,quantity,image_front_small_url,image_front_url,image_small_url,image_url,selected_images,categories_tags`);
     const p=j&&j.status===1&&j.product;
     if(!p)continue;
     const brand=(p.brands||"").split(",")[0].trim(),pn=(p.product_name||"").trim();
     const name=pn?[brand&&!pn.toLowerCase().includes(brand.toLowerCase())?brand:"",pn,p.quantity].filter(Boolean).join(" ").trim():"";
     const image=offImage(p);
-    if(name||image){found={name,source:"Open Food Facts",image};break;}
+    if(name||image){found={name,source:"Open Food Facts",image,tags:tagWords(p.categories_tags)};break;}
   }
   if(found&&found.name&&found.image)return found;
   if(KROGER_RELAY){
@@ -349,11 +494,11 @@ const Local={
   load(){try{this.items=JSON.parse(lsGet(LOCAL_KEY)||"[]");}catch(e){this.items=[];}if(!Array.isArray(this.items))this.items=[];},
   persist(){if(!lsSet(LOCAL_KEY,JSON.stringify(this.items)))toast("Couldn't save. Your phone may be out of storage.");},
   emit(){if(store===this){state.items=this.items.map(i=>({...i}));render();}},
-  start(){this.load();this.emit();setTimeout(backfillPictures,2500);},
+  start(){this.load();this.emit();setTimeout(()=>{migrateLots();backfillPictures();},2500);},
   add(d){const id=randId();this.items.push({id,...cleanItem(d),updatedAt:Date.now()});this.persist();this.emit();return id;},
   update(id,d){const k=this.items.findIndex(i=>i.id===id);if(k<0)return;this.items[k]={id,...cleanItem(d),updatedAt:Date.now()};this.persist();this.emit();},
   patch(id,f){const it=this.items.find(i=>i.id===id);if(!it)return;Object.assign(it,f);this.persist();this.emit();},
-  bump(id,delta){const it=this.items.find(i=>i.id===id);if(!it)return;it.qty=Math.max(0,(it.qty||0)+delta);it.updatedAt=Date.now();this.persist();this.emit();},
+  bump(id,delta){const it=this.items.find(i=>i.id===id);if(!it)return;it.lots=lotsAfter(it,delta);it.qty=Math.max(0,(it.qty||0)+delta);it.updatedAt=Date.now();this.persist();this.emit();},
   remove(id){this.items=this.items.filter(i=>i.id!==id);this.persist();this.emit();},
   restore(item){this.items.push({...item,...cleanItem(item)});this.persist();this.emit();},
   async replaceAll(items){this.items=items.map(i=>({id:i.id||randId(),...cleanItem(i),updatedAt:Date.now()}));this.persist();this.emit();}
@@ -413,7 +558,7 @@ const Cloud={
       state.items=s.docs.map(d=>({id:d.id,...d.data()}));state.loading=false;
       render();
       if(this.importQueue&&!s.metadata.fromCache)this.runImport();
-      if(!s.metadata.fromCache)setTimeout(backfillPictures,2500);
+      if(!s.metadata.fromCache)setTimeout(()=>{migrateLots();backfillPictures();},2500);
     },lost));
   },
   lostAccess(){
@@ -431,7 +576,11 @@ const Cloud={
   },
   add(d){const c=cleanItem(d),id=idForItem(c);this.fb.setDoc(this.ref(id),{...c,...this.stamp()}).catch(e=>this.fail(e));return id;},
   update(id,d){this.fb.setDoc(this.ref(id),{...cleanItem(d),...this.stamp()}).catch(e=>this.fail(e));},
-  bump(id,delta){this.fb.updateDoc(this.ref(id),{qty:this.fb.increment(delta),...this.stamp()}).catch(e=>this.fail(e));},
+  bump(id,delta){
+    const it=state.items.find(i=>i.id===id),f={qty:this.fb.increment(delta),...this.stamp()};
+    if(it)f.lots=lotsAfter(it,delta);
+    this.fb.updateDoc(this.ref(id),f).catch(e=>this.fail(e));
+  },
   remove(id){this.fb.deleteDoc(this.ref(id)).catch(e=>this.fail(e));},
   patch(id,f){this.fb.updateDoc(this.ref(id),f).catch(e=>console.warn(e));},
   restore(item){this.fb.setDoc(this.ref(item.id),{...cleanItem(item),...this.stamp()}).catch(e=>this.fail(e));},
@@ -555,28 +704,46 @@ function bump(id,delta){
 function render(){
   renderSync();
   const all=state.items,low=all.filter(i=>(i.qty||0)<=(i.low??0));
+  const fr=new Map(all.map(i=>[i.id,freshness(i)]));
+  const soon=all.filter(i=>{const f=fr.get(i.id);return f.state==="soon"||f.state==="past";});
+  try{if(navigator.setAppBadge){soon.length?navigator.setAppBadge(soon.length):navigator.clearAppBadge();}}catch(e){}
   const units=all.reduce((s,i)=>s+Math.max(0,i.qty||0),0);
-  $("#stats").innerHTML=all.length?`<span class="stat"><b>${all.length}</b> ${all.length===1?"item":"items"}</span><span class="stat"><b>${units}</b> on the shelf</span>${low.length?`<span class="stat low"><b>${low.length}</b> low or out</span>`:""}`:"";
+  $("#stats").innerHTML=all.length?`<span class="stat"><b>${all.length}</b> ${all.length===1?"item":"items"}</span><span class="stat"><b>${units}</b> on the shelf</span>${soon.length?`<span class="stat soon"><b>${soon.length}</b> use soon</span>`:""}${low.length?`<span class="stat low"><b>${low.length}</b> low or out</span>`:""}`:"";
   const locs=["All",...LOCS.filter(l=>all.some(i=>i.location===l))];
   if(low.length)locs.splice(1,0,"Low");
+  if(soon.length)locs.splice(1,0,"Soon");
   if(!locs.includes(state.filter))state.filter="All";
-  $("#chips").innerHTML=all.length?locs.map(l=>`<button class="chip" data-f="${esc(l)}" aria-pressed="${l===state.filter}">${l==="Low"?"Running low":esc(l)}</button>`).join(""):"";
+  $("#chips").innerHTML=all.length?locs.map(l=>`<button class="chip" data-f="${esc(l)}" aria-pressed="${l===state.filter}">${l==="Low"?"Running low":l==="Soon"?"Use soon":esc(l)}</button>`).join(""):"";
+  renderBanner(soon);
   const q=state.q.toLowerCase();
-  const rows=all.filter(i=>state.filter==="All"||(state.filter==="Low"?(i.qty||0)<=(i.low??0):i.location===state.filter))
+  const rows=all.filter(i=>state.filter==="All"||(state.filter==="Soon"?soon.includes(i):state.filter==="Low"?(i.qty||0)<=(i.low??0):i.location===state.filter))
     .filter(i=>!q||(i.name||"").toLowerCase().includes(q)||(i.barcode||"").includes(q))
-    .sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+    .sort(state.filter==="Soon"?(a,b)=>fr.get(a.id).next-fr.get(b.id).next:(a,b)=>(a.name||"").localeCompare(b.name||""));
   if(state.loading&&!all.length){$("#listHost").innerHTML=`<div class="list"><div class="empty">Loading your household's list…</div></div>`;return;}
   if(!all.length){$("#listHost").innerHTML=`<div class="list"><div class="empty"><h2>${store===Cloud?"Your shared list is empty":"Your cabinet is empty"}</h2>Tap <b>Scan barcode</b> and hold a can or box up to the camera. The app looks up what it is, you confirm the name, and every scan after that adds one.</div></div>`;return;}
   if(!rows.length){$("#listHost").innerHTML=`<div class="list"><div class="empty">Nothing matches that search.</div></div>`;return;}
-  $("#listHost").innerHTML=`<div class="list">${rows.map(i=>{const qty=Math.max(0,i.qty||0),isLow=qty<=(i.low??0);return`
+  $("#listHost").innerHTML=`<div class="list">${rows.map(i=>{const qty=Math.max(0,i.qty||0),isLow=qty<=(i.low??0),f=fr.get(i.id);
+    const freshTag=f.state==="past"?`<span class="tag past">Past ${fmtDate(f.next)}</span>`:f.state==="soon"?`<span class="tag soon">Use by ${fmtDate(f.next)}</span>`:"";return`
     <div class="row"><button class="main" data-edit="${esc(i.id)}">${thumbHTML(i)}<span class="text">
       <div class="name">${esc(i.name||"Unnamed item")}</div>
-      <div class="meta"><span>${esc(i.location||"Cabinet")}</span>${i.barcode?`<span class="code">${esc(prettyCode(i.barcode))}</span>`:""}${isLow?`<span class="tag">${qty===0?"Out":"Low"}</span>`:""}</div>
+      <div class="meta"><span>${esc(i.location||"Cabinet")}</span>${i.barcode?`<span class="code">${esc(prettyCode(i.barcode))}</span>`:""}${freshTag}${isLow?`<span class="tag">${qty===0?"Out":"Low"}</span>`:""}</div>
     </span></button><div class="stepper">
       <button data-dec="${esc(i.id)}" aria-label="Use one ${esc(i.name)}">−</button>
       <span class="qty ${qty===0?"zero":""}">${qty}</span>
       <button data-inc="${esc(i.id)}" aria-label="Add one ${esc(i.name)}">+</button>
     </div></div>`;}).join("")}</div>`;
+}
+
+const BANNER_KEY="cabinet-count:soon-banner-hidden";
+function renderBanner(soon){
+  const el=$("#soonBanner"),today=new Date().toDateString();
+  if(!soon.length||state.filter==="Soon"||lsGet(BANNER_KEY)===today){el.hidden=true;return;}
+  const past=soon.filter(i=>freshness(i).state==="past").length;
+  el.innerHTML=`<span>${soon.length===1?`<b>${esc(soon[0].name)}</b> should be used`:`<b>${soon.length} items</b> should be used`} soon${past?`, ${past} already past ${past===1?"its":"their"} estimated date`:""}.</span>
+    <div class="btns"><button class="btn primary small" id="soonShow">Show</button><button class="btn plain small" id="soonHide">Hide for today</button></div>`;
+  el.hidden=false;
+  $("#soonShow").onclick=()=>{state.filter="Soon";render();};
+  $("#soonHide").onclick=()=>{lsSet(BANNER_KEY,today);el.hidden=true;};
 }
 
 /* ===================== toast & sheets ===================== */
@@ -597,7 +764,11 @@ function armed(btn,label){if(btn.dataset.armed)return true;btn.dataset.armed="1"
 /* ===================== add / edit item ===================== */
 function itemForm({title,item,note,lookupCode}){
   const it=item||{};
-  let fImg=safeImg(it.img),fPhoto=safePhoto(it.photo),picRemoved=false,looked=false;
+  let fImg=safeImg(it.img),fPhoto=safePhoto(it.photo),picRemoved=false,looked=false,fTags="";
+  const keepPre=it.keep>0?([365,30,7,1].map(u=>[u,it.keep/u]).find(([u,n])=>Number.isInteger(n))):null;
+  const oldest=it.id?normLots(it)[0]:null;
+  const useByPre=it.useBy&&oldest&&it.useByAt===oldest.at?new Date(it.useBy-new Date(it.useBy).getTimezoneOffset()*6e4).toISOString().slice(0,10):"";
+  const foodOpts=FOODS.filter(f=>f.id!=="none").slice().sort((a,b)=>a.label.localeCompare(b.label)).concat(FOOD_BY_ID.none);
   const changed=store===Cloud&&it.updatedByName&&it.updatedAt?`<p class="note">Last changed by ${esc(it.updatedBy===Cloud.user?.uid?"you":it.updatedByName)}, ${timeAgo(it.updatedAt)}</p>`:"";
   openSheet(`
     <h2>${esc(title)}</h2>
@@ -614,6 +785,17 @@ function itemForm({title,item,note,lookupCode}){
       <div class="field"><label for="fQty">How many</label><input id="fQty" type="number" min="0" inputmode="numeric" value="${Math.max(0,it.qty??1)}"></div>
     </div>
     <div class="field"><label for="fLow">Flag as low at</label><input id="fLow" type="number" min="0" inputmode="numeric" value="${it.low??1}"></div>
+    <div class="panel">
+      <h3 style="margin:0">Freshness</h3>
+      <div class="field"><label for="fCat">Food type</label><select id="fCat"><option value="">Automatic</option>${foodOpts.map(f=>`<option value="${f.id}" ${it.catSet&&it.cat===f.id?"selected":""}>${esc(f.label)}</option>`).join("")}</select></div>
+      <div class="field"><label for="fKeepN">Keeps for</label><div class="keep-row">
+        <input id="fKeepN" type="number" min="1" inputmode="numeric" placeholder="USDA estimate" value="${keepPre?keepPre[1]:""}">
+        <select id="fKeepU" aria-label="Unit">${[[1,"days"],[7,"weeks"],[30,"months"],[365,"years"]].map(([u,l])=>`<option value="${u}" ${(keepPre?keepPre[0]:30)===u?"selected":""}>${l}</option>`).join("")}</select>
+      </div></div>
+      <div class="field"><label for="fUseBy">Date printed on the oldest package (optional)</label><input id="fUseBy" type="date" value="${useByPre}"></div>
+      <p class="note" id="freshNote"></p>
+      <ul class="lots" id="lotList"></ul>
+    </div>
     ${changed}
     <p class="note err" id="formErr" hidden></p>
     <div class="btns">
@@ -625,6 +807,33 @@ function itemForm({title,item,note,lookupCode}){
     $("#codeHint").textContent=c?`${codeKind(c)}${ok===false?" · check digit doesn't match, so a digit may be off":ok?" · check digit OK":""}`:"";
     $("#lookBtn").hidden=!/^\d{8,14}$/.test(c);};
   $("#fCode").oninput=hint;hint();
+  // ----- freshness preview, updated as you edit -----
+  const autoFood=()=>guessFood($("#fName").value+" ; "+fTags)||(!it.catSet&&it.cat)||"";
+  const formLots=qty=>it.id?lotsForQty(it,qty):(qty>0?[{at:Date.now(),n:qty}]:[]);
+  const draft=()=>{
+    const qty=Math.max(0,parseInt($("#fQty").value)||0),lots=formLots(qty);
+    const kn=parseFloat($("#fKeepN").value),keep=kn>0?Math.round(kn*parseInt($("#fKeepU").value)):0;
+    const ub=$("#fUseBy").value?new Date($("#fUseBy").value+"T12:00").getTime():0;
+    const cat=$("#fCat").value||autoFood();
+    return{name:$("#fName").value,location:$("#fLoc").value,qty,lots,cat,catSet:!!$("#fCat").value,keep,
+      useBy:ub&&lots.length?ub:0,useByAt:ub&&lots.length?lots[0].at:0,addedAt:it.addedAt||Date.now()};
+  };
+  const drawFresh=()=>{
+    const d=draft(),fr=freshness(d),food=FOOD_BY_ID[d.cat],auto=FOOD_BY_ID[autoFood()];
+    $("#fCat").options[0].textContent=auto?`Automatic: ${auto.label}`:"Automatic: not sure";
+    const st=STORAGE[d.location]||"p";
+    let note;
+    if(d.keep>0)note=`Keeps ${fmtKeep(d.keep)} (your setting).`;
+    else if(food&&food.id==="none")note="No reminders for this item.";
+    else if(!food||!fr.days)note="Not sure what kind of food this is, so there's no reminder yet. Pick a food type or enter how long it keeps.";
+    else{const used=food[st]?st:food.p?"p":food.f?"f":"z";
+      note=`USDA estimate for ${food.label.toLowerCase()}: about ${fmtKeep(fr.days)} in the ${STORAGE_WORD[used]}${used!==st?` (that's where it's usually kept)`:""}. You'll see a reminder ${fmtKeep(warnDays(fr.days))} before.`;}
+    $("#freshNote").textContent=note;
+    $("#lotList").innerHTML=fr.rows.length&&fr.days|| d.useBy?fr.rows.slice(-6).map(r=>`<li>${r.n} added ${fmtDate(r.at)}${r.due?` → use by ${fmtDate(r.due)}${r.due===d.useBy&&r.at===d.useByAt?" (printed date)":""}`:""}</li>`).join(""):"";
+  };
+  ["#fCat","#fKeepN","#fKeepU","#fUseBy","#fLoc","#fQty"].forEach(id=>$(id).addEventListener("input",drawFresh));
+  ["#fCat","#fKeepU","#fLoc"].forEach(id=>$(id).addEventListener("change",drawFresh));
+  drawFresh();
   const drawPic=()=>{if(!$("#picBox"))return;$("#picBox").innerHTML=thumbHTML({name:$("#fName").value||it.name,img:fImg,photo:fPhoto},true);$("#picRemove").hidden=!(fImg||fPhoto);};
   drawPic();
   $("#picFile").addEventListener("change",async e=>{
@@ -641,12 +850,13 @@ function itemForm({title,item,note,lookupCode}){
     b.disabled=false;b.textContent="Look up this barcode";
     if(r){if(r.name&&(!$("#fName").value.trim()||$("#fName").dataset.auto)){$("#fName").value=r.name;$("#fName").dataset.auto="1";}
       if(r.image&&!fPhoto&&!picRemoved)fImg=r.image;drawPic();
+      if(r.tags)fTags=r.tags;drawFresh();
       f.textContent=`Found on ${r.source}. Edit the name if you like.`;f.className="found";}
     else{f.textContent=navigator.onLine?"Not found in the product databases. Type a name.":"You're offline, so the lookup didn't run. Type a name.";f.className="note";}
     f.hidden=false;
   };
   $("#lookBtn").onclick=doLookup;
-  $("#fName").oninput=e=>{delete e.target.dataset.auto;if(!fImg&&!fPhoto)drawPic();};
+  $("#fName").oninput=e=>{delete e.target.dataset.auto;if(!fImg&&!fPhoto)drawPic();drawFresh();};
   $("#cancelBtn").onclick=closeSheet;
   if($("#delBtn"))$("#delBtn").onclick=e=>{
     if(!armed(e.target,"Tap again to delete"))return;
@@ -661,6 +871,8 @@ function itemForm({title,item,note,lookupCode}){
     const data={name,barcode:code,location:$("#fLoc").value,qty:$("#fQty").value,low:$("#fLow").value,
       img:fImg,photo:fPhoto,imgOff:picRemoved||(!!it.imgOff&&code===it.barcode),
       imgTry:looked?IMG_TRY:(code===it.barcode?it.imgTry:0)};
+    const fd=draft();
+    Object.assign(data,{lots:fd.lots,addedAt:fd.addedAt,cat:fd.cat,catSet:fd.catSet,keep:fd.keep,useBy:fd.useBy,useByAt:fd.useByAt});
     if(it.id)store.update(it.id,data);else store.add(data);
     closeSheet();
     toast(it.id?`Saved ${name}`:`Added ${name} · ${Math.max(0,parseInt(data.qty)||0)} on the shelf`);
