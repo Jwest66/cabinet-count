@@ -731,7 +731,7 @@ function render(){
     const freshTag=f.state==="past"?`<span class="tag past">Past ${fmtDate(f.next)}</span>`:f.state==="soon"?`<span class="tag soon">Use by ${fmtDate(f.next)}</span>`:"";return`
     <div class="row"><button class="main" data-edit="${esc(i.id)}">${thumbHTML(i)}<span class="text">
       <div class="name">${esc(i.name||"Unnamed item")}</div>
-      <div class="meta"><span>${esc(i.location||"Cabinet")}</span>${i.barcode?`<span class="code">${esc(prettyCode(i.barcode))}</span>`:""}${freshTag}${isLow?`<span class="tag">${qty===0?"Out":"Low"}</span>`:""}</div>
+      <div class="meta"><span>${esc(i.location||"Cabinet")}</span>${freshTag}${isLow?`<span class="tag">${qty===0?"Out":"Low"}</span>`:""}</div>
     </span></button><div class="stepper">
       <button data-dec="${esc(i.id)}" aria-label="Use one ${esc(i.name)}">−</button>
       <span class="qty ${qty===0?"zero":""}">${qty}</span>
