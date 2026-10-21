@@ -78,6 +78,10 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .banner{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--soon-bg);border:1px solid var(--soon-line);border-radius:12px;padding:10px 12px;font-size:.9rem}
 .banner .btns{gap:6px}
 .lots{display:flex;flex-direction:column;gap:2px;font-size:.84rem;color:var(--muted);margin:0;padding:0;list-style:none;font-variant-numeric:tabular-nums}
+.news{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.news li{display:flex;flex-direction:column;gap:2px}
+.news b{font:600 1rem var(--f-display);color:var(--ink)}
+.news span{font-size:.9rem;color:var(--muted)}
 .keep-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
 .empty{text-align:center;padding:36px 20px;color:var(--muted)}
 .empty h2{font:600 1.15rem var(--f-display);color:var(--ink);margin:0 0 6px}
@@ -747,6 +751,35 @@ function renderBanner(soon){
   $("#soonHide").onclick=()=>{lsSet(BANNER_KEY,today);el.hidden=true;};
 }
 
+/* ===================== what's new ===================== */
+// Change the id whenever there's something new to announce; each phone sees it once.
+const WHATS_NEW={id:"2026-10-21",items:[
+  ["Use-soon reminders","Everything you add is now dated. Items getting close to their estimated use-by date get an amber tag, and a banner and the Use soon filter show what to use first. Tap an item to set its food type, how long it keeps, or the date printed on the package."],
+  ["Product pictures","Items show a photo from Open Food Facts or Kroger. Tap an item and use Take photo to add your own."],
+  ["Share with your household","Sign in to share one list that stays in sync between phones. Open the ⋯ menu to set it up or invite someone."],
+  ["A new look","Darker Night Pantry colors and a new home-screen icon."]
+]};
+const SEEN_KEY="cabinet-count:whats-new-seen";
+function openWhatsNew(){
+  lsSet(SEEN_KEY,WHATS_NEW.id);
+  openSheet(`<h2>What's new</h2>
+    <ul class="news">${WHATS_NEW.items.map(([t,d])=>`<li><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join("")}</ul>
+    <button class="btn primary" id="wnOk">Got it</button>`);
+  $("#wnOk").onclick=closeSheet;
+}
+function maybeWhatsNew(){
+  const seen=lsGet(SEEN_KEY);
+  if(seen===WHATS_NEW.id)return;
+  // Brand-new users have nothing to compare against, so they skip this one.
+  if(!seen&&!Local.items.length&&!lsGet(CLOUD_FLAG)&&!lsGet(BACKUP_KEY)){lsSet(SEEN_KEY,WHATS_NEW.id);return;}
+  let tries=0;
+  const go=()=>{
+    if($("#sheetBg")||!$("#scanner").hidden){if(++tries<30)setTimeout(go,2000);return;} // wait until nothing else is open
+    openWhatsNew();
+  };
+  setTimeout(go,1500);
+}
+
 /* ===================== toast & sheets ===================== */
 let toastTimer;
 function toast(msg,undo){
@@ -1066,6 +1099,7 @@ function openMenu(){
       <button class="btn plain" id="mCsv">Export spreadsheet (CSV)</button>
       <button class="btn danger" id="mClear">${store===Cloud?"Delete everything in the shared list":"Delete all items"}</button>
     </div>
+    <button class="btn plain" id="mNews">What's new</button>
     <button class="btn plain" id="mClose">Close</button>`);
   const on=(id,fn)=>{const el=$(id);if(el)el.onclick=fn;};
   on("#mSignIn",openSignIn);
@@ -1103,6 +1137,7 @@ function openMenu(){
     await store.replaceAll([]);
     toast("Deleted all items",()=>store.replaceAll(old));
   });
+  on("#mNews",openWhatsNew);
   on("#mClose",closeSheet);
 }
 $("#restoreFile").addEventListener("change",async e=>{
@@ -1220,6 +1255,7 @@ if(lsGet(CLOUD_FLAG)){
 }else{
   Local.start();
 }
+maybeWhatsNew();
 if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body>
