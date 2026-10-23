@@ -48,7 +48,7 @@ Open it from the new icon. The first time you tap **Scan barcode**, allow camera
 
 ## Product lookup
 
-The app checks **Open Food Facts** first (free and open, strong on groceries), then **UPCitemdb**'s free trial tier (broader, with a daily lookup limit). If neither knows the barcode, you type the name once. Lookups need an internet connection; everything else works offline.
+The app checks **Open Food Facts** first (free and open, strong on groceries), then **Kroger**'s catalog through the picture relay (see below), then **UPCitemdb**'s free trial tier (broader, with a daily lookup limit). Each source can fill in a name, a photo or both, and the app stops as soon as it has both. Short UPC-E barcodes (soda cans, gum) are expanded to the full UPC-A first. If none of them knows the barcode, you type the name once. Lookups need an internet connection; everything else works offline.
 
 ## Use-soon reminders
 
@@ -74,9 +74,11 @@ The app uses the Firebase project `pantrycontents`. In console.firebase.google.c
 
 The Firebase settings in `index.html` aren't secret: they only identify the project. The rules are what keep each household's list private to its members.
 
-## Kroger pictures (optional)
+## Kroger picture relay
 
-`kroger-relay/worker.js` is a tiny Cloudflare Worker that looks up product photos in Kroger's catalog. It holds the Kroger API keys, which must never go in `index.html` because this repo is public. Deploy it on Cloudflare, add `KROGER_CLIENT_ID` and `KROGER_CLIENT_SECRET` under the Worker's Settings → Variables and Secrets, then put the Worker's address in `KROGER_RELAY` near the top of `index.html`.
+`kroger-relay/worker.js` is a tiny Cloudflare Worker that looks up product names and photos in Kroger's catalog. It's live at `https://cabinet-count-pictures.jon-namenlos.workers.dev/`, set in `KROGER_RELAY` near the top of `index.html`. It holds the Kroger API keys, which must never go in `index.html` because this repo is public. They live only in Cloudflare, under the Worker's Settings → Variables and Secrets (`KROGER_CLIENT_ID` and `KROGER_CLIENT_SECRET`).
+
+The Worker's code isn't deployed from this repo. Whenever `kroger-relay/worker.js` changes, paste it into the Worker's editor on Cloudflare and click **Deploy**. Setting `KROGER_RELAY` to `""` turns Kroger lookups off.
 
 ## Your data
 
