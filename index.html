@@ -266,7 +266,9 @@ function cleanItem(d){
 }
 /* ---------- freshness ---------- */
 // Shelf lives in days, from USDA FoodKeeper / FSIS guidance, using the LOW end of each range
-// so reminders come early rather than late. p = pantry or cabinet, f = fridge, z = freezer.
+// so reminders come early rather than late. Pantry times are checked against the FSIS FoodKeeper
+// data (data version 128, catalog.data.gov/dataset/fsis-foodkeeper-data); soda, beer, juice,
+// snack cakes, boxed noodles and pet food aren't in it. p = pantry or cabinet, f = fridge, z = freezer.
 // Order matters: the first match wins, so specific foods come before general ones.
 const FOODS=[
   {id:"none",label:"Not food (no reminders)",re:/\b(paper towels?|toilet paper|tissues?|napkins?|soap|detergent|shampoo|conditioner|toothpaste|mouthwash|deodorant|lotion|razors?|trash bags?|garbage bags?|aluminum foil|foil|plastic wrap|zip ?lock|ziploc|batteries|cleaner|bleach|sponges?|dish ?washer|laundry|dryer sheets|wipes|light ?bulbs?|vitamins?)\b/},
@@ -280,16 +282,20 @@ const FOODS=[
   {id:"cannedacid",label:"Canned tomatoes, fruit and pickles",p:365,f:365,re:/\b(crushed|diced|stewed|whole peeled|canned) tomatoes\b|\btomato (sauce|paste|puree)\b|\b(pasta|marinara|spaghetti|pizza) sauce\b|\bsalsa\b|\b(peaches|pears|pineapple|mandarin oranges|fruit cocktail|applesauce|cranberry sauce|pickles?|sauerkraut|olives)\b/},
   {id:"frozenmeals",label:"Frozen meals and pizza",z:90,re:/\b(frozen|tv dinner|pizza|pot pies?|burritos?|waffles|nuggets|fish sticks|lasagna)\b/},
   {id:"cereal",label:"Cereal",p:180,re:/\b(cereals?|granola|cheerios|corn flakes|bran|frosted)\b/},
-  {id:"crackers",label:"Crackers and pretzels",p:90,re:/\b(crackers?|pretzels?|goldfish|saltines|graham)\b/},
+  {id:"crackers",label:"Crackers and pretzels",p:120,re:/\b(crackers?|pretzels?|goldfish|saltines|graham)\b/},
   {id:"chips",label:"Chips and popcorn",p:60,re:/\b(chips|crisps|popcorn|tortilla chips|doritos|cheetos|pringles)\b/},
   {id:"cookies",label:"Cookies and snack cakes",p:60,re:/\b(cookies?|oreos?|snack cakes?|brownies|pastries)\b/},
   {id:"bars",label:"Snack and granola bars",p:180,re:/\b(bars?)\b/},
-  {id:"spices",label:"Spices and seasonings",p:730,re:/\b(spices?|seasonings?|cinnamon|paprika|cumin|oregano|chili powder|garlic powder|onion powder|black pepper|peppercorns?|bay leaves|thyme|nutmeg|salt|bouillon)\b/},
-  {id:"tortillas",label:"Tortillas and wraps",p:7,f:28,z:180,re:/\b(tortillas?|wraps)\b/},
+  {id:"seasonings",label:"Seasoning blends and bouillon",p:365,re:/\b(seasonings?|seasoning (mix|blend)|bouillon)\b/},
+  {id:"spices",label:"Spices",p:730,re:/\b(spices?|cinnamon|paprika|cumin|oregano|chili powder|garlic powder|onion powder|black pepper|peppercorns?|bay leaves|thyme|nutmeg|salt)\b/},
+  {id:"tortillas",label:"Tortillas and wraps",p:25,f:60,z:180,re:/\b(tortillas?|wraps)\b/},
   {id:"driedbeans",label:"Dried beans and lentils",p:365,re:/\b(dry|dried)\b[a-z ]*\b(beans|lentils|peas|chickpeas)\b|\blentils\b/},
-  {id:"canned",label:"Canned beans, vegetables, soup, meat or fish",p:730,f:730,re:/\b(canned|cans?|soups?|chili|broth|stock|beans|chickpeas|garbanzos?|corn|peas|green beans|tuna|sardines|spam|vienna sausages|evaporated milk|condensed milk|refried)\b/},
+  {id:"cannedmilk",label:"Evaporated and condensed milk",p:365,re:/\b(evaporated|condensed) milk\b/},
+  {id:"cannedfish",label:"Canned seafood (not tuna)",p:365,re:/\b(sardines|kippers|canned (salmon|crab|clams|oysters|seafood)|smoked oysters)\b/},
+  {id:"canned",label:"Canned beans, vegetables, soup, meat or tuna",p:730,f:730,re:/\b(canned|cans?|soups?|chili|broth|stock|beans|chickpeas|garbanzos?|corn|peas|green beans|tuna|spam|vienna sausages|refried)\b/},
   {id:"nutbutter",label:"Peanut and nut butter",p:180,re:/\b(peanut|almond|cashew|nut|sunflower) butter\b|\bnutella\b/},
-  {id:"pasta",label:"Dry pasta and noodles",p:365,re:/\b(pasta|spaghetti|macaroni|penne|noodles|linguine|fettuccine|rotini|rigatoni|lasagna noodles|ramen|orzo|couscous|mac (and|&) cheese)\b/},
+  {id:"boxedpasta",label:"Mac and cheese, ramen and couscous",p:365,re:/\b(ramen|instant noodles|cup noodles|couscous|mac(aroni)? (and|&) cheese)\b/},
+  {id:"pasta",label:"Dry pasta and noodles",p:730,re:/\b(pasta|spaghetti|macaroni|penne|noodles|linguine|fettuccine|rotini|rigatoni|lasagna noodles|orzo)\b/},
   {id:"milk",label:"Milk and cream",f:7,z:90,re:/\b(milk|half and half|half-and-half|heavy cream|whipping cream|buttermilk|dairy milks?|milks)\b(?! ?chocolate)/},
   {id:"yogurt",label:"Yogurt",f:7,z:30,re:/\b(yogh?urts?|kefir)\b/},
   {id:"eggs",label:"Eggs",f:21,re:/\beggs?\b/},
@@ -308,29 +314,33 @@ const FOODS=[
   {id:"groundmeat",label:"Ground meat",f:1,z:90,re:/\bground (beef|turkey|pork|chicken|meat|chuck|sirloin)\b|\bhamburger meat\b/},
   {id:"meat",label:"Steaks, chops and roasts",f:3,z:120,re:/\b(steaks?|pork chops?|chops|roast|ribs|tenderloin|brisket|lamb|veal|pork loin)\b/},
   {id:"fish",label:"Fresh fish and seafood",f:1,z:60,re:/\b(fillets?|shrimp|tilapia|cod|scallops?|crab legs|fresh salmon|salmon fillet|seafood)\b/},
-  {id:"wwflour",label:"Whole wheat flour",p:30,f:180,re:/\bwhole wheat flour\b/},
+  {id:"wwflour",label:"Whole wheat flour",p:90,f:180,re:/\bwhole wheat flour\b/},
   {id:"flour",label:"Flour, cornmeal and baking mixes",p:180,re:/\b(flour|cornmeal|cake mix|brownie mix|pancake mix|muffin mix|biscuit mix|bisquick|baking powder|baking soda|yeast|cornstarch)\b/},
   {id:"bread",label:"Bread, buns and bagels",p:4,f:7,z:90,re:/\b(bread|buns?|bagels?|rolls|english muffins?|baguette|brioche|pita|loaf)\b/},
   {id:"berries",label:"Fresh berries",f:2,re:/\b(strawberries|blueberries|raspberries|blackberries|berries)\b/},
   {id:"greens",label:"Lettuce and leafy greens",f:3,re:/\b(lettuce|salad mix|spring mix|spinach|kale|arugula|greens|romaine)\b/},
   {id:"apples",label:"Apples",p:21,f:28,re:/\bapples?\b(?! ?(sauce|juice|cider))/},
-  {id:"citrus",label:"Oranges, lemons and limes",p:10,f:21,re:/\b(oranges?|lemons?|limes?|grapefruits?|clementines?|mandarins?)\b(?! ?(juice|soda))/},
-  {id:"bananas",label:"Bananas and avocados",p:3,f:5,re:/\b(bananas?|avocados?)\b/},
-  {id:"potatoes",label:"Potatoes and onions",p:30,re:/\b(potatoes|sweet potatoes|onions|garlic bulbs?|yams?)\b/},
+  {id:"citrus",label:"Oranges, lemons and limes",p:10,f:10,re:/\b(oranges?|lemons?|limes?|grapefruits?|clementines?|mandarins?)\b(?! ?(juice|soda))/},
+  {id:"bananas",label:"Bananas and avocados",p:3,f:3,re:/\b(bananas?|avocados?)\b/},
+  {id:"sweetpotatoes",label:"Sweet potatoes and yams",p:14,re:/\b(sweet potatoes|yams?)\b/},
+  {id:"potatoes",label:"Potatoes and onions",p:30,re:/\b(potatoes|onions|garlic bulbs?)\b/},
   {id:"freshveg",label:"Fresh vegetables",f:5,re:/\b(carrots?|celery|broccoli|cauliflower|bell peppers?|cucumbers?|zucchini|mushrooms?|asparagus|green onions|scallions|tomatoes|cabbage|squash|fresh herbs|cilantro|parsley)\b/},
   {id:"brownrice",label:"Brown rice and whole grains",p:180,re:/\b(brown rice|quinoa|farro|barley|wild rice)\b/},
   {id:"rice",label:"White rice",p:730,re:/\brice\b/},
   {id:"sugar",label:"Sugar",p:730,re:/\bsugar\b/},
   {id:"oats",label:"Oats and oatmeal",p:365,re:/\b(oats|oatmeal|rolled oats)\b/},
   {id:"nuts",label:"Nuts, seeds and trail mix",p:120,f:120,z:365,re:/\b(nuts|almonds|peanuts|cashews|walnuts|pecans|pistachios|seeds|trail mix)\b/},
-  {id:"driedfruit",label:"Dried fruit",p:180,re:/\b(raisins|dried (fruit|cranberries|apricots|mango)|prunes|dates)\b/},
-  {id:"jam",label:"Jam, jelly, honey and syrup",p:365,re:/\b(jam|jelly|preserves|marmalade|honey|syrup|molasses)\b/},
-  {id:"mayo",label:"Mayonnaise",p:60,f:60,re:/\b(mayo|mayonnaise|aioli)\b/},
-  {id:"dressing",label:"Salad dressing",p:300,f:30,re:/\b(dressing|ranch|vinaigrette)\b/},
-  {id:"condiments",label:"Ketchup, mustard and sauces",p:365,f:180,re:/\b(ketchup|catsup|mustard|bbq sauce|barbecue sauce|hot sauce|soy sauce|teriyaki|worcestershire|vinegar|sriracha|steak sauce|relish|sauce)\b/},
+  {id:"dates",label:"Dates",p:60,f:365,z:365,re:/\b(dates|medjool)\b/},
+  {id:"driedfruit",label:"Dried fruit",p:180,re:/\b(raisins|dried (fruit|cranberries|apricots|mango)|prunes)\b/},
+  {id:"jam",label:"Jam and jelly",p:180,re:/\b(jam|jelly|preserves|marmalade)\b/},
+  {id:"syrup",label:"Honey, syrup and molasses",p:365,re:/\b(honey|syrup|molasses)\b/},
+  {id:"mayo",label:"Mayonnaise",p:90,f:60,re:/\b(mayo|mayonnaise|aioli)\b/},
+  {id:"dressing",label:"Salad dressing",p:180,f:30,re:/\b(dressing|ranch|vinaigrette)\b/},
+  {id:"hotsauce",label:"Hot sauce",p:180,re:/\b(hot sauce|sriracha|tabasco|pepper sauce)\b/},
+  {id:"condiments",label:"Ketchup, mustard and sauces",p:365,f:180,re:/\b(ketchup|catsup|mustard|bbq sauce|barbecue sauce|soy sauce|teriyaki|worcestershire|vinegar|steak sauce|relish|sauce)\b/},
   {id:"oil",label:"Cooking oil",p:180,re:/\b(oil|cooking spray|shortening|crisco)\b/},
-  {id:"coffee",label:"Coffee",p:180,z:365,re:/\b(coffee|espresso|k-?cups?)\b/},
-  {id:"tea",label:"Tea",p:365,re:/\btea\b/},
+  {id:"coffee",label:"Coffee",p:90,z:180,re:/\b(coffee|espresso|k-?cups?)\b/},
+  {id:"tea",label:"Tea",p:540,re:/\btea\b/},
   {id:"candy",label:"Candy and chocolate",p:180,re:/\b(candy|chocolate|gummies|gummy|m&ms|skittles|mints|gum)\b/},
   {id:"petfood",label:"Pet food",p:365,re:/\b(dog food|cat food|pet food|kibble|dog treats|cat treats)\b/}
 ];
@@ -343,7 +353,14 @@ const STORAGE_WORD={p:"pantry",f:"fridge",z:"freezer"};
 // Open Food Facts category tags ("en:canned-foods") read as plain words for matching.
 function tagWords(tags){return(Array.isArray(tags)?tags:[]).slice(0,30).map(t=>String(t).replace(/^[a-z]{2}:/,"").replace(/-/g," ")).join(" ; ");}
 function guessFood(text){const t=" "+String(text||"").toLowerCase().replace(/[®™]/g,"")+" ";for(const f of FOODS)if(f.re.test(t))return f.id;return"";}
-function foodOf(i){return i.cat&&FOOD_BY_ID[i.cat]?i.cat:guessFood(i.name);}
+// Food types that were split out of a broader one. An item saved under the broader type picks up the
+// narrower one from its name, unless you chose the type yourself.
+const SPLIT_FROM={seasonings:"spices",cannedmilk:"canned",cannedfish:"canned",boxedpasta:"pasta",sweetpotatoes:"potatoes",dates:"driedfruit",syrup:"jam",hotsauce:"condiments"};
+function foodOf(i){
+  if(!i.cat||!FOOD_BY_ID[i.cat])return guessFood(i.name);
+  if(!i.catSet){const g=guessFood(i.name);if(SPLIT_FROM[g]===i.cat)return g;}
+  return i.cat;
+}
 // Days this item keeps where it's stored: your own number first, then the USDA estimate.
 function keepDays(i){
   if(i.keep>0)return i.keep;
