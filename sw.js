@@ -1,6 +1,6 @@
 // Cabinet Count service worker: keeps the app working offline.
 // Bump VERSION whenever you change any app file so phones pick up the update.
-const VERSION = "cabinet-count-v10";
+const VERSION = "cabinet-count-v11";
 const SHELL = [
   "./",
   "./index.html",

@@ -580,7 +580,21 @@ const Cloud={
     toast(e&&e.code==="permission-denied"?"The shared list refused that change. The database rules may need updating.":"Couldn't save that change. Try again.");
   },
   add(d){const c=cleanItem(d),id=idForItem(c);this.fb.setDoc(this.ref(id),{...c,...this.stamp()}).catch(e=>this.fail(e));return id;},
-  update(id,d){this.fb.setDoc(this.ref(id),{...cleanItem(d),...this.stamp()}).catch(e=>this.fail(e));},
+  // Write only what you changed since opening the item (base), and the count as +/-, so someone else's
+  // scans or edits made in the meantime are kept.
+  update(id,d,base){
+    const c=cleanItem(d),cur=state.items.find(i=>i.id===id);
+    if(!cur||!base){this.fb.setDoc(this.ref(id),{...c,...this.stamp()}).catch(e=>this.fail(e));return;}
+    const b=cleanItem(base),now=cleanItem(cur),same=(x,y)=>JSON.stringify(x)===JSON.stringify(y),f=this.stamp();
+    for(const k of new Set([...Object.keys(c),...Object.keys(b)])){
+      if(k==="qty"||k==="lots"||same(c[k],b[k]))continue;
+      f[k]=k in c?c[k]:this.fb.deleteField();
+    }
+    const delta=c.qty-now.qty;
+    if(delta)f.qty=this.fb.increment(delta);
+    if(!same(c.lots,now.lots))f.lots=c.lots||[];
+    this.fb.updateDoc(this.ref(id),f).catch(e=>this.fail(e));
+  },
   bump(id,delta){
     const it=state.items.find(i=>i.id===id),f={qty:this.fb.increment(delta),...this.stamp()};
     if(it)f.lots=lotsAfter(it,delta);
@@ -907,7 +921,13 @@ function itemForm({title,item,note,lookupCode}){
       imgTry:looked?IMG_TRY:(code===it.barcode?it.imgTry:0)};
     const fd=draft();
     Object.assign(data,{lots:fd.lots,addedAt:fd.addedAt,cat:fd.cat,catSet:fd.catSet,keep:fd.keep,useBy:fd.useBy,useByAt:fd.useByAt});
-    if(it.id)store.update(it.id,data);else store.add(data);
+    if(it.id){
+      // Apply your count change on top of the latest count, so scans made while this was open aren't lost.
+      const cur=state.items.find(x=>x.id===it.id)||it,delta=Math.max(0,parseInt(data.qty)||0)-Math.max(0,it.qty||0);
+      data.qty=Math.max(0,(cur.qty||0)+delta);data.lots=lotsAfter(cur,delta);
+      if(data.useBy)data.useByAt=data.lots.length?data.lots[0].at:0;
+      store.update(it.id,data,it);
+    }else store.add(data);
     closeSheet();
     toast(it.id?`Saved ${name}`:`Added ${name} · ${Math.max(0,parseInt(data.qty)||0)} on the shelf`);
   };
