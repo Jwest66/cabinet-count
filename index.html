@@ -739,13 +739,15 @@ function bump(id,delta){
 /* ===================== render ===================== */
 function render(){
   renderSync();
-  const all=state.items,low=all.filter(i=>(i.qty||0)<=(i.low??0));
+  // Items at 0 stay saved (name, barcode, photo, food type) so a rescan brings them back,
+  // but only show under Running low or when searched for.
+  const all=state.items,have=all.filter(i=>(i.qty||0)>0),low=all.filter(i=>(i.qty||0)<=(i.low??0));
   const fr=new Map(all.map(i=>[i.id,freshness(i)]));
   const soon=all.filter(i=>{const f=fr.get(i.id);return f.state==="soon"||f.state==="past";});
   try{if(navigator.setAppBadge){soon.length?navigator.setAppBadge(soon.length):navigator.clearAppBadge();}}catch(e){}
   const units=all.reduce((s,i)=>s+Math.max(0,i.qty||0),0);
-  $("#stats").innerHTML=all.length?`<span class="stat"><b>${all.length}</b> ${all.length===1?"item":"items"}</span><span class="stat"><b>${units}</b> on the shelf</span>${soon.length?`<span class="stat soon"><b>${soon.length}</b> use soon</span>`:""}${low.length?`<span class="stat low"><b>${low.length}</b> low or out</span>`:""}`:"";
-  const locs=["All",...LOCS.filter(l=>all.some(i=>i.location===l))];
+  $("#stats").innerHTML=all.length?`<span class="stat"><b>${have.length}</b> ${have.length===1?"item":"items"}</span><span class="stat"><b>${units}</b> on the shelf</span>${soon.length?`<span class="stat soon"><b>${soon.length}</b> use soon</span>`:""}${low.length?`<span class="stat low"><b>${low.length}</b> low or out</span>`:""}`:"";
+  const locs=["All",...LOCS.filter(l=>have.some(i=>i.location===l))];
   if(low.length)locs.splice(1,0,"Low");
   if(soon.length)locs.splice(1,0,"Soon");
   if(!locs.includes(state.filter))state.filter="All";
@@ -753,11 +755,12 @@ function render(){
   renderBanner(soon);
   const q=state.q.toLowerCase();
   const rows=all.filter(i=>state.filter==="All"||(state.filter==="Soon"?soon.includes(i):state.filter==="Low"?(i.qty||0)<=(i.low??0):i.location===state.filter))
+    .filter(i=>q||state.filter==="Low"||(i.qty||0)>0)
     .filter(i=>!q||(i.name||"").toLowerCase().includes(q)||(i.barcode||"").includes(q))
     .sort(state.filter==="Soon"?(a,b)=>fr.get(a.id).next-fr.get(b.id).next:(a,b)=>(a.name||"").localeCompare(b.name||""));
   if(state.loading&&!all.length){$("#listHost").innerHTML=`<div class="list"><div class="empty">Loading your household's list…</div></div>`;return;}
   if(!all.length){$("#listHost").innerHTML=`<div class="list"><div class="empty"><h2>${store===Cloud?"Your shared list is empty":"Your cabinet is empty"}</h2>Tap <b>Scan barcode</b> and hold a can or box up to the camera. The app looks up what it is, you confirm the name, and every scan after that adds one.</div></div>`;return;}
-  if(!rows.length){$("#listHost").innerHTML=`<div class="list"><div class="empty">Nothing matches that search.</div></div>`;return;}
+  if(!rows.length){$("#listHost").innerHTML=`<div class="list"><div class="empty">${q?"Nothing matches that search.":`<h2>You're all out</h2>Everything on your list is at 0. Tap <b>Running low</b> to see what you've used up, or scan something to add it back.`}</div></div>`;return;}
   $("#listHost").innerHTML=`<div class="list">${rows.map(i=>{const qty=Math.max(0,i.qty||0),isLow=qty<=(i.low??0),f=fr.get(i.id);
     const freshTag=f.state==="past"?`<span class="tag past">Past ${fmtDate(f.next)}</span>`:f.state==="soon"?`<span class="tag soon">Use by ${fmtDate(f.next)}</span>`:"";return`
     <div class="row"><button class="main" data-edit="${esc(i.id)}">${thumbHTML(i)}<span class="text">
@@ -784,7 +787,8 @@ function renderBanner(soon){
 
 /* ===================== what's new ===================== */
 // Change the id whenever there's something new to announce; each phone sees it once.
-const WHATS_NEW={id:"2026-10-21",items:[
+const WHATS_NEW={id:"2026-10-29",items:[
+  ["Used-up items step aside","When something hits 0 it leaves the main list. It's still remembered: find it under Running low or by searching, and scanning it again brings it back."],
   ["Use-soon reminders","Everything you add is now dated. Items getting close to their estimated use-by date get an amber tag, and a banner and the Use soon filter show what to use first. Tap an item to set its food type, how long it keeps, or the date printed on the package."],
   ["Product pictures","Items show a photo from Open Food Facts or Kroger. Tap an item and use Take photo to add your own."],
   ["Share with your household","Sign in to share one list that stays in sync between phones. Open the ⋯ menu to set it up or invite someone."],
@@ -1275,7 +1279,10 @@ $("#chips").addEventListener("click",e=>{const b=e.target.closest("[data-f]");if
 $("#listHost").addEventListener("click",e=>{
   const t=e.target.closest("button");if(!t)return;
   if(t.dataset.inc)bump(t.dataset.inc,1);
-  else if(t.dataset.dec)bump(t.dataset.dec,-1);
+  else if(t.dataset.dec){
+    const r=bump(t.dataset.dec,-1);
+    if(r&&r.prev===1&&!state.q&&state.filter!=="Low")toast(`${r.it.name||"Item"} is out. Find it under Running low.`,()=>bump(r.it.id,1));
+  }
   else if(t.dataset.edit)itemForm({title:"Edit item",item:state.items.find(i=>i.id===t.dataset.edit)});
 });
 function setMode(m){state.mode=m;$("#modeAdd").setAttribute("aria-pressed",m==="add");$("#modeUse").setAttribute("aria-pressed",m==="use");}
