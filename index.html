@@ -117,6 +117,10 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .barcode-strip{font-family:var(--f-mono);letter-spacing:.1em}
 .menu{display:flex;flex-direction:column;gap:8px}
 .menu .btn{text-align:left}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer}
+.toggle span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.toggle b{font-weight:600}
+.toggle input{width:22px;height:22px;flex:none;margin:0}
 .or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.8rem}
 .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
 .panel{border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
@@ -212,6 +216,8 @@ const LOCS=["Cabinet","Pantry","Fridge","Freezer","Bathroom","Other"];
 const LOCAL_KEY="cabinet-count:v1";
 const BACKUP_KEY="cabinet-count:v1:before-sharing";
 const CLOUD_FLAG="cabinet-count:signed-in";
+const LOW_TAG_KEY="cabinet-count:show-low-tag"; // "off" hides the Low tag on this phone
+const showLowTag=()=>lsGet(LOW_TAG_KEY)!=="off";
 const APP_URL=location.origin+location.pathname.replace(/index\.html$/,"");
 
 const $=s=>document.querySelector(s);
@@ -761,11 +767,12 @@ function render(){
   if(state.loading&&!all.length){$("#listHost").innerHTML=`<div class="list"><div class="empty">Loading your household's list…</div></div>`;return;}
   if(!all.length){$("#listHost").innerHTML=`<div class="list"><div class="empty"><h2>${store===Cloud?"Your shared list is empty":"Your cabinet is empty"}</h2>Tap <b>Scan barcode</b> and hold a can or box up to the camera. The app looks up what it is, you confirm the name, and every scan after that adds one.</div></div>`;return;}
   if(!rows.length){$("#listHost").innerHTML=`<div class="list"><div class="empty">${q?"Nothing matches that search.":`<h2>You're all out</h2>Everything on your list is at 0. Tap <b>Running low</b> to see what you've used up, or scan something to add it back.`}</div></div>`;return;}
-  $("#listHost").innerHTML=`<div class="list">${rows.map(i=>{const qty=Math.max(0,i.qty||0),isLow=qty<=(i.low??0),f=fr.get(i.id);
+  const showLow=showLowTag();
+  $("#listHost").innerHTML=`<div class="list">${rows.map(i=>{const qty=Math.max(0,i.qty||0),isLow=qty<=(i.low??0),f=fr.get(i.id),lowTag=qty===0?"Out":showLow?"Low":"";
     const freshTag=f.state==="past"?`<span class="tag past">Past ${fmtDate(f.next)}</span>`:f.state==="soon"?`<span class="tag soon">Use by ${fmtDate(f.next)}</span>`:"";return`
     <div class="row"><button class="main" data-edit="${esc(i.id)}">${thumbHTML(i)}<span class="text">
       <div class="name">${esc(i.name||"Unnamed item")}</div>
-      <div class="meta"><span>${esc(i.location||"Cabinet")}</span>${freshTag}${isLow?`<span class="tag">${qty===0?"Out":"Low"}</span>`:""}</div>
+      <div class="meta"><span>${esc(i.location||"Cabinet")}</span>${freshTag}${isLow&&lowTag?`<span class="tag">${lowTag}</span>`:""}</div>
     </span></button><div class="stepper">
       <button data-dec="${esc(i.id)}" aria-label="Use one ${esc(i.name)}">−</button>
       <span class="qty ${qty===0?"zero":""}">${qty}</span>
@@ -786,27 +793,32 @@ function renderBanner(soon){
 }
 
 /* ===================== what's new ===================== */
-// Change the id whenever there's something new to announce; each phone sees it once.
-const WHATS_NEW={id:"2026-10-29",items:[
-  ["Used-up items step aside","When something hits 0 it leaves the main list. It's still remembered: find it under Running low or by searching, and scanning it again brings it back."],
-  ["Use-soon reminders","Everything you add is now dated. Items getting close to their estimated use-by date get an amber tag, and a banner and the Use soon filter show what to use first. Tap an item to set its food type, how long it keeps, or the date printed on the package."],
-  ["Product pictures","Items show a photo from Open Food Facts or Kroger. Tap an item and use Take photo to add your own."],
-  ["Share with your household","Sign in to share one list that stays in sync between phones. Open the ⋯ menu to set it up or invite someone."],
-  ["A new look","Darker Night Pantry colors and a new home-screen icon."]
-]};
+// Each entry is [date, title, text], newest first. Add new entries at the top with today's date.
+// The popup shows a phone only the entries newer than the last one it saw; the ⋯ menu shows them all.
+const WHATS_NEW=[
+  ["2026-11-05","Turn Low tags off","If you usually keep just one of something, the Low tag can get noisy. Open the ⋯ menu and switch off Show Low tags. Out tags and the Running low filter still work."],
+  ["2026-10-29","Used-up items step aside","When something hits 0 it leaves the main list. It's still remembered: find it under Running low or by searching, and scanning it again brings it back."],
+  ["2026-10-21","Use-soon reminders","Everything you add is now dated. Items getting close to their estimated use-by date get an amber tag, and a banner and the Use soon filter show what to use first. Tap an item to set its food type, how long it keeps, or the date printed on the package."],
+  ["2026-10-21","Product pictures","Items show a photo from Open Food Facts or Kroger. Tap an item and use Take photo to add your own."],
+  ["2026-10-21","Share with your household","Sign in to share one list that stays in sync between phones. Open the ⋯ menu to set it up or invite someone."],
+  ["2026-10-21","A new look","Darker Night Pantry colors and a new home-screen icon."]
+];
+const NEWEST=WHATS_NEW[0][0];
 const SEEN_KEY="cabinet-count:whats-new-seen";
-function openWhatsNew(){
-  lsSet(SEEN_KEY,WHATS_NEW.id);
+function openWhatsNew(all){
+  const seen=lsGet(SEEN_KEY)||"";
+  const list=all?WHATS_NEW:WHATS_NEW.filter(([d])=>d>seen);
+  lsSet(SEEN_KEY,NEWEST);
   openSheet(`<h2>What's new</h2>
-    <ul class="news">${WHATS_NEW.items.map(([t,d])=>`<li><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join("")}</ul>
+    <ul class="news">${(list.length?list:WHATS_NEW).map(([,t,d])=>`<li><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join("")}</ul>
     <button class="btn primary" id="wnOk">Got it</button>`);
   $("#wnOk").onclick=closeSheet;
 }
 function maybeWhatsNew(){
   const seen=lsGet(SEEN_KEY);
-  if(seen===WHATS_NEW.id)return;
+  if(seen&&seen>=NEWEST)return;
   // Brand-new users have nothing to compare against, so they skip this one.
-  if(!seen&&!Local.items.length&&!lsGet(CLOUD_FLAG)&&!lsGet(BACKUP_KEY)){lsSet(SEEN_KEY,WHATS_NEW.id);return;}
+  if(!seen&&!Local.items.length&&!lsGet(CLOUD_FLAG)&&!lsGet(BACKUP_KEY)){lsSet(SEEN_KEY,NEWEST);return;}
   let tries=0;
   const go=()=>{
     if($("#sheetBg")||!$("#scanner").hidden){if(++tries<30)setTimeout(go,2000);return;} // wait until nothing else is open
@@ -1132,6 +1144,9 @@ function householdSection(){
 function openMenu(){
   openSheet(`
     ${householdSection()}
+    <h3>Display</h3>
+    <label class="toggle" for="mLowTag"><span><b>Show Low tags</b><small class="note">Marks items at or below their "flag as low" count. Out tags and the Running low filter stay either way.</small></span>
+      <input type="checkbox" id="mLowTag" ${showLowTag()?"checked":""}></label>
     <h3>Backup</h3>
     <p class="note">${store===Cloud?"The shared list lives in your household's online database. A backup file is a snapshot you can keep.":"Your items are stored only on this phone. Save a backup now and then, or before switching phones."}</p>
     <div class="menu">
@@ -1178,7 +1193,9 @@ function openMenu(){
     await store.replaceAll([]);
     toast("Deleted all items",()=>store.replaceAll(old));
   });
-  on("#mNews",openWhatsNew);
+  on("#mNews",()=>openWhatsNew(true));
+  const lt=$("#mLowTag");
+  if(lt)lt.onchange=()=>{lsSet(LOW_TAG_KEY,lt.checked?null:"off");render();toast(lt.checked?"Low tags are on.":"Low tags are off. Out tags still show.");};
   on("#mClose",closeSheet);
 }
 $("#restoreFile").addEventListener("change",async e=>{
